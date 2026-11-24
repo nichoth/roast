@@ -1,0 +1,6 @@
+npm warn using --force Recommended protections disabled.
+npm warn deprecated gulp-header@1.8.12: Removed event-stream from gulp-header
+npm warn deprecated lodash.template@4.18.1: This package is deprecated. Use https://socket.dev/npm/package/eta instead.
+npm warn deprecated coffee-script@1.12.7: CoffeeScript on NPM has moved to "coffeescript" (no hyphen)
+
+added 113 packages in 1s

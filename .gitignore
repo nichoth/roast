@@ -1,8 +1,9 @@
-/bin/
-/dist/
-/THIRD_PARTY_LICENSES/
-*.test
-/roast
-/roast.exe
-/roast-broker
-/roast-broker.exe
+dist/
+WIP.md
+.agents
+.claude
+node_modules
+.DS_Store
+.env
+test/*.js
+ralph_tiiny.sh

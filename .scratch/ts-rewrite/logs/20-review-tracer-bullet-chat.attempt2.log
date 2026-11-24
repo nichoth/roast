@@ -1,0 +1,1107 @@
+Reading prompt from stdin...
+OpenAI Codex v0.171.0
+--------
+workdir: /Users/nick/code/roast.ts-rewrite-20-review-tracer-bullet-chat
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 01a20ae7-55de-7bb3-801c-3600d29e8b42
+--------
+user
+---- SPEC CONTEXT ----
+# TypeScript rewrite of Roast
+
+**Status:** ready-for-agent
+
+This is the index of a self-contained spec. The settled decisions are in
+`spec/00-decisions.md`; each area is specified in its own file under
+`spec/` (listed under "Area files"). Where this index and an area file
+disagree, the "Resolved open questions" section below wins, then the area
+file, then `spec/00-decisions.md`.
+
+Architectural decisions: ADR-0003 (trust hash v2, partly supersedes
+ADR-0001) and ADR-0004 (TypeScript package, raw fetch).
+
+## Problem Statement
+
+Roast is installed into a project with npm, but it is a Go binary. Every
+release builds six platform packages plus a launcher, runs a license
+collection script per target, and needs a Go toolchain next to Node. The
+maintainer works in TypeScript and wants one language, one toolchain, and
+the TypeScript and npm conventions shared by their other packages. Users
+see none of this directly, but they pay for it in release friction,
+platform-package install quirks (`EBADPLATFORM`, forced workspaces), and a
+launcher that can resolve the wrong `roast` binary.
+
+## Solution
+
+Rewrite Roast in TypeScript as one pure-JS npm package, `2.0.0`, that
+behaves like the Go version at commit `cd08f10`: same commands, flags,
+defaults, exit codes, JSON reports, run records, and security model. The
+only differences are the deliberate changes listed below. Runtime
+libraries are bundled into a single ESM file, so installing Roast still
+adds no transitive packages to a user's project. Users upgrade by bumping
+the dependency; the one visible step is approving the project config once
+more (ADR-0003).
+
+## Implementation Decisions
+
+### Area files
+
+| File | Area |
+| ---- | ---- |
+| `spec/00-decisions.md` | Settled decisions and area-file conventions |
+| `spec/01-cli.md` | CLI surface, `review` orchestration, exit codes |
+| `spec/02-config.md` | Project config, built-in providers, roles |
+| `spec/03-trust-credentials.md` | Trust (hash v2), stored credentials |
+| `spec/04-scope.md` | Review scope: diffs, untracked, renames, caps |
+| `spec/05-context.md` | Finder context, navigation tools, grounding |
+| `spec/06-llm-protocols.md` | `chat`, `responses`, `anthropic` adapters |
+| `spec/07-agent-loop.md` | Agent loop, token ledger, wrap-up |
+| `spec/08-finder-prompts.md` | Finder stage, findings, fingerprints, prompts |
+| `spec/09-verify-render.md` | Verifier, report rendering, textsafe |
+| `spec/10-records.md` | Run records, bundles, `runs` / `runs show` |
+| `spec/11-snapshot.md` | Snapshots, `runs checkout` / `runs prune` |
+| `spec/12-gate.md` | Gate (pre-commit hook), `ignore` |
+| `spec/13-login.md` | `login`, `logout`, OpenRouter PKCE |
+| `spec/14-doctor-init-skill.md` | `doctor`, `init` starter, `skill` |
+| `spec/15-packaging.md` | Build, tests, lint, CI, release, M0, M6 |
+
+### Modules
+
+One module directory per area under the source root, mirroring the Go
+packages: cli, config, trust, credentials, scope, context, llm (protocol
+adapters, SSE parser, agent loop, ledger), review (finder), prompts,
+verify, render, textsafe, record, runbundle, snapshot, gate, skill. Two
+shared modules sit below them:
+
+- **gocompat**: Go-compatibility helpers that parity depends on --
+  `isGoSpace` / `goTrimSpace` (Go `unicode.IsSpace`, which differs from JS
+  `\s` and `trim`), `goExt` (Go `filepath.Ext`, which differs from Node
+  `path.extname` for names like `docs/.md`), `truncateUtf8`, and
+  `formatFixed2` (Go `%.2f`, which rounds exact ties to even unlike
+  `toFixed`), plus the Go-style duration parser.
+- **fsutil**: atomic file writes with explicit modes (trust record,
+  credentials, hook files, run records).
+
+The CLI has one entry, bundled to one file. There is no library API.
+
+### Deliberate changes from the Go baseline
+
+Product changes (from `spec/00-decisions.md`):
+
+1. No `completion` command.
+2. No Windows support (`os: darwin, linux`).
+3. Node `>=22.18`, checked at startup with a clear error.
+4. Trust hash v2 (ADR-0003); Go-era approvals are not honored.
+5. `DEBUG=roast:*` tracing, never including bodies, headers, prompts, or
+   credentials.
+6. Version `2.0.0`.
+
+Tightenings and fixes (resolved open questions):
+
+7. JSON keys match exactly (case-sensitive) everywhere: `.roast.json`,
+   `credentials.json`, bundle manifests, model tool arguments. JSON `null`
+   still means "absent", as in Go.
+8. Every HTTP redirect is refused as an endpoint error: inference requests
+   and key validation alike.
+9. Provider error bodies are read at most 32 KiB.
+10. `grep_repo` forces `GIT_LITERAL_PATHSPECS=0` so the secret-file
+    denylist cannot be disabled from the environment.
+11. A run ID must be a plain name: `.`, `..`, and path separators are
+    rejected.
+12. `runs checkout` clears an inherited `GIT_INDEX_FILE`, and resolves a
+    relative target directory against the working directory once, used
+    consistently by every git call.
+13. Cached tokens are subtracted once, not twice, for `chat` and
+    `responses` usage.
+14. A `chat` stream chunk without usage keeps the last reported usage
+    instead of clearing it.
+15. Diff name lists and untracked-file lists use `-z`, and diffs run with
+    `core.quotePath=false`; non-ASCII paths are no longer skipped or
+    misattributed.
+16. The staged generated-file exclusion lists renames' deleted side too.
+17. The user's `diff.orderFile` is overridden so diff order is
+    deterministic.
+18. The size-fit breakdown uses a stable sort.
+19. A one-line hook file without a trailing newline gets one before
+    Roast's block is appended.
+20. `confidence_floor` values are validated to 0..1, matching the schema.
+21. Anthropic tool definitions carry the full JSON schema, including
+    `additionalProperties`.
+22. A second Ctrl-C force-exits with status 130. Ctrl-C at a raw-mode
+    secret prompt is cancellation (exit 5).
+23. Unreachable Go code is not ported: branch-survey scope, the `git_diff`
+    tool and the grounder's range corpus, and the test-only helpers
+    `DescribeCredential`, `IsLoopbackHost`, `DescribeEndpoint`.
+24. File names that are not valid UTF-8 are skipped with a warning.
+
+### Cross-cutting rules
+
+- **JSON encoding**: no HTML escaping of `<>&` or U+2028/U+2029. Parity is
+  defined on parsed JSON, not bytes. Tool results sent to models go
+  through one encoder in the llm area that sorts object keys, matching
+  Go's map ordering so prompts stay stable.
+- **Bytes and text**: git output is read as `Buffer`. Diff bytes stay
+  `Buffer` wherever they are hashed or recorded, so digests match Go.
+  Text is decoded with U+FFFD replacement only where it goes to a model or
+  a report. Lone surrogates from model output become U+FFFD when the llm
+  area decodes it; `textsafe` escapes any that remain as `\uNNNN`. Config
+  validation rejects lone surrogates so the trust hash is always defined.
+- **Config numbers**: integer fields reject non-integer lexemes (`1.0`,
+  `1e3`) by checking raw token text through the JSONC parser's visitor.
+- **Output strings**: em dashes in Go's user- and model-facing strings
+  are kept, written as `\u2014` escapes in TS source; docs and comments
+  never contain the character.
+- **CLI parsing**: yargs semantics are accepted where they differ from
+  cobra: decimal integers only, `--flag false` may be read as a value,
+  list flags split on plain commas. A parse failure uses the parsed
+  `--error-format` when available. EPIPE on stdout exits quietly with the
+  computed code.
+- **Process lifetime**: every tool that spawns a process kills it on
+  abort, and the CLI calls `process.exit` after flushing output.
+- **Runtime**: the `node:zlib` zstd ExperimentalWarning is suppressed (that
+  warning only). Tar archives support PAX path records when writing and
+  reading. Version, commit, and build date are injected at build time;
+  running from source reports `dev`.
+- **Network**: no proxy library is bundled. The README documents
+  `NODE_USE_ENV_PROXY=1` and `NODE_EXTRA_CA_CERTS`; `doctor` warns when
+  `HTTPS_PROXY` is set but `NODE_USE_ENV_PROXY` is not.
+
+### Milestones
+
+M0 scaffold; M1 config, trust, credentials; M2 scope and context; M3
+`chat` protocol, agent loop, finder, verifier, render, records -- first
+working `npx roast review`; M4 `responses` and `anthropic`; M5 remaining
+commands; M6 cutover (delete Go, platform packages, launcher; update
+AGENTS.md; release `2.0.0`). Details in `spec/15-packaging.md`.
+
+## Testing Decisions
+
+- A good test drives external behavior and asserts on exit codes, JSON
+  output, files written, and requests the fake server received. No
+  assertions on exact human-readable text, docs, or CSS.
+- **Primary seam**: the CLI run in-process (`run(argv, io)` with
+  injectable stdin, stdout, stderr, env, cwd) against a `node:http` fake
+  inference server speaking all three protocols, with a swappable `fetch`
+  so profiles on built-in endpoints reach the fake. Prior art: Go's
+  `executeContext` with `httptest`, `providerServer`,
+  `redirectDefaultTransport`, `settingsRepo`, `loginRepo`.
+- **Lower seams**, only where the CLI is too coarse: the token ledger,
+  trust hashing (frozen test vectors), `textsafe`, the SSE parser,
+  `gocompat`, and the agent loop driven by a scripted fake protocol
+  adapter.
+- **Swappable module functions** for terminal detection, browser opening,
+  and the browser-login timeout, as in Go.
+- **Gate**: a real `git commit` against a shell-stub `roast` at
+  `node_modules/.bin/roast`, as in Go's hook execution tests.
+- Tests that touch records, credentials, trust, or skills chdir into a
+  temporary Git repository and isolate `HOME`, `XDG_CONFIG_HOME`, and
+  `CLAUDE_CONFIG_DIR`, as the Go tests do.
+- Go tests are ported area by area; each area file's test plan maps Go
+  test names to behaviors and seams.
+- A temporary differential harness builds the Go binary at `cd08f10` and
+  runs both CLIs against the same fake server, comparing exit codes,
+  parsed JSON, and run records, with an allowlist for the deliberate
+  changes above. It runs in CI on Ubuntu from M1 to M5 and is deleted at
+  M6.
+- The two rendered user prompts are checked against Go output by a
+  temporary differential test, deleted at M6.
+- Opt-in live tests (`ROAST_LIVE_*`) are kept and never run in CI.
+- The allocation-bound test for huge files becomes an RSS bound.
+
+## Out of Scope
+
+- Windows support.
+- A programmatic library API.
+- Behavior redesigns beyond the deliberate changes above; they come after
+  `2.0.0`.
+- Tracking or porting future upstream (`bluesky-social/roast`) changes.
+- Byte-identical compressed output (`.gz`, `.tar.zst`): decompressed bytes
+  must match, compressor output may differ.
+- Byte-identical help text with cobra.
+- Bundling a proxy agent.
+- Git submodules inside snapshots (documented as unsupported).
+
+## Further Notes
+
+- Kept as Go does, on purpose: `null` (not `[]`) for empty `notes`,
+  `matches`, and `lines`; `verified: true` with no findings; the monthly
+  index keeping the oldest sighting (the Go comment is wrong, not the
+  behavior); a global `core.hooksPath` affecting `gate disable`; `init`
+  writing to the working directory; doctor checking only user-level skill
+  installs; CLI hints saying bare `roast`; a malformed trust record
+  exiting 4; author routes discarding `--finder-*` overrides; an all-zero
+  finding from invalid `report_finding` JSON; index timestamps in local
+  time and `meta.json` in UTC; default adaptive thinking for
+  `claude-mythos-preview`.
+- The headless OpenRouter login (no `callback_url`) needs a manual check
+  against the live service before release.
+- `jsonc-parser` must run with trailing commas allowed: the `init`
+  starter writes one.
+- `@substrate-system/debug` and its dependencies must pass the license
+  allowlist in M0.
+- The uncommitted `package.json` lists `yargs`, `zod`, `jsonc-parser`
+  under `dependencies`; M0 moves them to `devDependencies`.
+
+
+---- TICKET ----
+20-review-tracer-bullet-chat.md
+# 20: Tracer bullet: `npx roast review` end to end on `chat` with `--no-verify`
+
+**Blocked by:** 06, 07, 08, 10, 11, 12, 14, 16, 17, 18, 19
+**Touches:** `src/cli/review.ts` (`runReview`), `src/cli/review-flags.ts`
+(`ReviewFlags`, `RoleFlags`, `validateReviewFlags`), `src/cli/resolve.ts`
+(`configInt`, `flagOrConfig`, `flagOrConfigInt`, `flagOrConfigDuration`,
+`resolveLangs`, `applyRoleFlags`), `src/cli/snapshot-meta.ts`
+(`captureSnapshot`), `src/cli/log.ts` (`logf`), `src/cli/run.ts` (register
+`review` and bare `$0`), `src/cli/config.ts` (`loadProjectConfig` wiring
+with `withStoredCredentials`), `test/cli/review*.ts`,
+`test/helpers/` (`settingsRepo`, `approveProjectConfig`,
+`requestRecorder`, `reviewMeta`)
+**Spec:** `spec/01-cli.md` 2.2, 2.3, 2.6, 2.7, 2.8 (steps 1-16 and
+19-21), 2.11, 2.12, 2.13 (disabled branch), 2.14, 2.15, section 5;
+`spec/03-trust-credentials.md` 2.8, 5.4 (review rows), 5.6 (review rows);
+`spec/10-records.md` 2.3 ("Write ordering in `review`");
+`spec/09-verify-render.md` 2.5, 2.6; spec.md "Cross-cutting rules"
+(Process lifetime, CLI parsing) and deliberate change 22
+**Status:** ready-for-agent
+
+## What to build
+
+The first working `npx roast review`. A developer with an approved
+`.roast.json` whose finder profile speaks `chat` runs `npx roast review
+--no-verify` (or bare `npx roast --no-verify`) in a Git repository. Roast
+validates flags, loads and resolves the config, checks trust, builds the
+diff scope, sends the finder conversation to the provider, writes the
+JSON and Markdown report, writes a complete run record (meta, `.gz`
+artifacts, `provider-responses.jsonl`, `findings.jsonl`, `result.json.gz`,
+`report.md`, `bundle.tar.zst`, index line), and exits 0, 1, 2, 3, 4, or 5
+per the exit contract.
+
+This ticket wires the orchestration in `spec/01-cli.md` 2.8 from flag
+validation through finalization, using the modules from the blocking
+tickets. It owns all `review` flags (2.6), their raw validation (2.7),
+the flag -> config -> default resolution (2.14), the LLM client config
+(2.15), stdout/stderr discipline (2.12), and `reviewExitError`.
+
+Scope boundaries:
+
+- Verification (step 17) is ticket 21. Here `doVerify` is computed and
+  the verifier role is validated when `doVerify` is true (step 3), but
+  step 17 is a pass-through stub. Every test in this ticket uses
+  `--no-verify` or `--quick`.
+- Snapshots are ticket 22. `captureSnapshot` is implemented in
+  `src/cli/snapshot-meta.ts` with the capture function injected. The
+  disabled branch (`review.snapshot: false`) is complete here. Until 22
+  lands, the enabled branch calls a placeholder that throws, which the
+  2.13 contract already turns into `captured:false` with a reason and a
+  caveat, and the review continues. There is no worktree pin yet, so
+  non-staged reviews read the live tree through the context area's live
+  reader (the documented pin-failure fallback, without the log line).
+  Tests here set `review.snapshot: false` unless they assert nothing
+  about snapshots.
+- The gate bootstrap offer (2.9) is ticket 30. Leave a single call site
+  at the top of the review handler that does nothing yet.
+- Repo survey (`--scope repo`) is ticket 25. Flag validation for
+  `--scope` (2.7 items 9-11) lands here; a survey run may fail with a
+  usage error until 25.
+- `responses` and `anthropic` end-to-end tests are tickets 27 and 28;
+  this ticket needs only `chat`.
+
+Seam resolutions that apply: the Go duration parser and formatter come
+from `gocompat` (ticket 03); terminal helpers come from
+`src/cli/terminal.ts`; `StoredCredentials.lookup` is synchronous; the
+LLM client is the area 06 `send` adapter used through the agent loop.
+
+Two deferred checks from the trust and credentials tickets land here,
+because they need a real review: an untrusted config fails closed before
+any request, and a stored credential reaches the provider through a
+review.
+
+## Acceptance criteria
+
+Flags and validation:
+
+- [ ] Each 2.7 rule (for example `--staged --uncommitted-only`,
+  `--format bogus`, `--max-turns 0`, `--max-attempts=0`,
+  `--request-timeout=-1s`, `--max-tokens-total=-1`,
+  `--max-verified=-1`, `--scope bogus`, `--scope repo --quick`,
+  `--max-severity bogus`) exits 2 with category `usage` and the fake
+  server receives zero requests, even when the config sets the matching
+  `limits` key.
+- [ ] `--finder-max-output-tokens=0` with `--quick --uncommitted-only`
+  exits 2, category `usage`.
+- [ ] `--error-format json --format invalid` exits 2 and stderr parses as
+  JSON with `error_category: "usage"` and `exit_code: 2`.
+- [ ] `--paths a,b --paths c` reaches scope as three pathspecs;
+  `--max-attempts 0x10` exits 2; `--quick false` is read as false.
+- [ ] An empty diff exits 0 with `assessment: "NO_DIFF"` in the stdout
+  JSON, writes no run directory, sends no request, and still exits 0
+  with an invalid `--mode` or `--lang` and with `--max-severity INFO`.
+- [ ] Invalid `--mode` or an unknown or mixed-with-`none` `--lang` on a
+  non-empty diff exits 2 with zero requests.
+
+Config, roles, trust:
+
+- [ ] A JSONC config with comments is used; the nearest `.roast.json`
+  below the Git toplevel wins; `--config` overrides discovery; an
+  invalid config exits 2; a missing config exits 2 (message names
+  `npx roast init`); the user config directory is never read.
+- [ ] Prompt override paths resolve against the config file's
+  directory, including when run from a subdirectory.
+- [ ] `review --config <file>` outside a Git repository exits 2; bare
+  `roast` outside Git exits 0 with help on stdout.
+- [ ] An untrusted config exits 2, sends zero requests, and writes no
+  trust record; a legacy (Go-era) trust record exits 2 with zero
+  requests; a malformed trust record exits 4 with zero requests.
+- [ ] A built-in-only config (built-in endpoint, standard key variable)
+  reviews without any trust state being written.
+- [ ] With simulated terminals, answering `y` to the inline trust prompt
+  approves, writes the record, and the review proceeds; declining (`""`,
+  `n`, `no`, `yy`) exits 2 with zero requests and no record. Without
+  terminals the review never reads stdin.
+- [ ] A project-scope stored key reaches a profile on the OpenAI
+  built-in endpoint with `protocol: chat` (served by the fake through
+  the swappable `fetch`); env beats project beats user scope; a stored
+  key never reaches a custom endpoint or follows `--finder-base-url`.
+- [ ] A credentials file others can read (either scope) fails the review
+  with zero requests.
+- [ ] No copy of the API key appears in stdout, stderr, or any file in
+  the run directory.
+- [ ] `--author-model` flips the finder per the config's author routes;
+  `ROAST_AUTHOR_MODEL` and the other removed variables in 2.6 change
+  nothing (budgets keep defaults, no request to env-named endpoints).
+- [ ] A changed `--finder-base-url` withholds the ambient provider key.
+
+Pipeline and records:
+
+- [ ] A `--no-verify --format json` review against the fake `chat` server
+  exits 0 with no findings and 1 with `--max-severity HIGH` when the
+  finder reports a HIGH finding; stdout is one JSON line with the
+  finding.
+- [ ] The run directory under `<toplevel>/.roast/runs/<run-id>/` holds
+  `meta.json`, the four `.gz` init artifacts, `provider-responses.jsonl`
+  (one line per finder model call), `result.json.gz`, `report.md`, and a
+  `bundle.tar.zst` that verifies; the monthly index gains one line.
+- [ ] Records land under the Git toplevel when cwd and the config are in
+  subdirectories.
+- [ ] `meta.json` budgets record `deadline_duration`, `request_timeout`
+  as Go duration strings, `max_total_tokens`, `verifier_cap`,
+  `max_attempts`, `max_turns`, `max_prompt_bytes`, and
+  `ledger_committed_tokens` when the ledger limit is above 0; with all
+  budget flags at 0 and `--max-attempts=1` they read `"0s"`, `"0s"`, 0,
+  0, 1.
+- [ ] The finder role meta records profile, protocol, session header,
+  and model; the session header is sent only by the profile that
+  configures it.
+- [ ] Config `limits` appear in budgets and derived meta; flags override
+  them for one invocation only, including `--finder-model`.
+- [ ] `limits.max_diff_bytes` truncates the diff the fake receives and
+  the JSON report carries `diff_truncated`; `limits.max_prompt_bytes`
+  too small exits 2 with zero requests and no run directory.
+- [ ] A small diff downgrades `--interactive` to one structured call;
+  zero interactive thresholds keep the interactive tool loop.
+- [ ] `review.snapshot: false` records `snapshot.captured: false` with
+  the disabled reason and caveat, and creates no `refs/roast/` refs.
+- [ ] `--format markdown` writes nothing to stdout; `--format json`
+  writes no Markdown to stderr.
+- [ ] A finder result that is incomplete exits 4 after the report and
+  run record are written.
+
+Errors and cancellation:
+
+- [ ] A provider 401 exits 3 (category `auth`); a provider 500 after
+  retries exits 4 (category `endpoint`); in both cases the run directory
+  stays initialized without `result.json.gz`.
+- [ ] Aborting `io.signal` during the finder exits 5 with category
+  `cancelled`.
+- [ ] Spawning `dist/cli.js` against a fake that never answers: one
+  SIGINT exits 5; two SIGINTs exit 130; no child process remains
+  (skip if ticket 04 already covers this against a review).
+- [ ] A run-record finalize failure exits 4 even when `--max-severity`
+  would have exited 1 (unit on `reviewExitError`).
+
+- [ ] Unit: `resolveLangs`, the `flagOrConfig` variants, and the
+  `captureSnapshot` disabled branch behave per 2.8 step 11, 2.14, 2.13.
+- [ ] lint, typecheck, and the TS test suite pass, and the Go build and
+  Go tests still pass.
+
+
+These are records of earlier runs. The ticket or spec may have changed since then; where they disagree, follow the ticket and spec. Do not repeat an approach these notes say failed unless you can see why it failed.
+
+---- PREVIOUS ATTEMPTS AT THIS TICKET ----
+## 2026-11-23 16:13 -- ts-rewrite/20 attempt 1 -- failed (exit 1)
+
+Effort: medium. Agent exit: 1. Checked items: none.
+
+The agent left no notes.
+
+---- WHAT THE BLOCKING TICKETS DID ----
+## 2026-11-18 12:19 -- ts-rewrite/06 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $3.49. Checked items: "`inferFamily` matches the table in 02 section 2.10.", "`npm run lint`, `npm run typecheck`, and `npm run test:ts` pass, and the Go build and `go test ./...` still pass.".
+
+### Agent notes
+# Ticket 06 notes (providers and role/credential resolution)
+
+## Seams
+Module seam only (spec 02 section 5 "Resolution and credentials" and
+"Providers and families"): CLI wiring cases are ticket 20.
+
+## Implemented
+- src/config/provider.ts: registry, lookupProvider, providerAt,
+  defaultBaseURL, sameEndpoint, parseEndpoint (empty-host pinning).
+  endpoint.ts now reuses parseEndpoint and defaultBaseURL (so a profile
+  endpoint `https:///v1` is rejected at load, as in Go).
+- src/config/family.ts: inferFamily, canonicalFamily (load.ts reuses it).
+- src/config/credential.ts: Env, StoredCredentials (moved from load.ts,
+  re-exported there; lookup returns {key, scope}|null), CredentialSource,
+  describeSource, roleKeyVar, ambientCredential, resolveCredential,
+  overrideEndpoint, `internal` {applyEndpointOverrides, rebindCredential}.
+- src/config/resolved-role.ts: ResolvedRole, makeRole, updateRole
+  (separate module to avoid a credential<->role import cycle).
+- src/config/role.ts: resolveRole, resolveFinderFlip, validateRole,
+  validateEndpoint, isPlaceholderModel (starter area may move it).
+- Tests: test/config/{provider,family,role,override,flip,helpers}.ts.
+
+## Readings
+- "No JSON serialization of a ResolvedRole contains the secret": apiKey
+  and stored are non-enumerable; tests check JSON.stringify, spread, and
+  util.inspect. Callers must use updateRole instead of spreading.
+- No debug tracing added: @substrate-system/debug cannot be imported yet
+  (AGENTS.md license note).
+- Mutation check: dropping crossed handling, the profile fallback, the
+  endpoint-override reset of `crossed`, or the preferred withheld var
+  each fails a test.
+
+## 2026-11-18 12:37 -- ts-rewrite/07 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $3.82. Checked items: "The projection lists roles sorted, author routes after their role, excludes unselected profiles, and keeps prompt overrides in fixed order.", "`npm run lint`, `npm run typecheck`, and `npm run test:ts` pass, and the Go build and `go test ./...` still pass.".
+
+### Agent notes
+# Ticket 07 notes (trust hash v2 and `roast trust`)
+
+## Seams
+Module seams for projection/hash (`src/config/trust.ts`,
+`src/config/canonical.ts`) and the record (`src/trust/trust.ts`, temp
+Git repo); CLI in-process (`runRoast`) for the `trust` command;
+`requireTrust` at its module seam with injected io (review wiring is
+ticket 20).
+
+## Implemented so far
+- src/config/trust.ts: trustProjection, requiresApproval,
+  trustHashDocument, trustHash. HashDocument is a `type` alias (not an
+  interface) so it is assignable to CanonicalValue.
+- src/config/canonical.ts: canonicalJson; lone surrogates detected by a
+  hand scan because tsconfig lib lacks `String.prototype.isWellFormed`.
+- src/trust/trust.ts: stateDir/trustPath/readTrustRecord/isApproved/
+  approve. Takes a trailing `{signal, env}` (git env from the CLI ctx),
+  not just a signal as the spec sketch shows.
+- Tests: test/config/trust.ts, test/config/canonical.ts,
+  test/trust/trust.ts.
+
+## Readings
+- Missing `version` reports "unsupported version 0" (Go zero value).
+- eslint --fix (quote-props) turns a quoted 'é' key into a literal
+  non-ASCII identifier; use a computed key via a const.
+
+## CLI (done)
+- src/cli/trust.ts: trustCommand (registered in commands.ts),
+  writeTrustSummary, requireTrust(dir, cfg, io:TrustIo) where TrustIo is
+  Pick<RunContext, stdin|stderr|lines|env|signal>. NOT_APPROVED and
+  LEGACY_APPROVAL messages exported (both name `npx roast trust`).
+- src/cli/terminal.ts: promptNoDefault.
+- Tests: test/cli/trust.ts (CLI via runRoast), test/cli/require-trust.ts
+  (module seam, simulateTerminals).
+- "Default terminal detection rejects non-TTY streams" was already
+  covered by test/cli/terminal.ts; added a requireTrust test that relies
+  on the default hook with buffer streams.
+- Stdin read error during the trust prompt exits 4 (tested).
+- Mutation checks done: family sort, line() escape, terminal check,
+  answer parsing all make tests fail.
+- Not wired into review (ticket 20).
+
+## 2026-11-18 12:45 -- ts-rewrite/08 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $2.41. Checked items: "`npm run lint`, `npm run typecheck`, and `npm run test:ts` pass, and the Go build and `go test ./...` still pass.".
+
+### Agent notes
+# Ticket 08 notes (stored credentials)
+
+## Seams
+Module seam `src/credentials/credentials.ts` (temp Git repo, isolated
+env) per spec 03 5.5; `loadProjectConfig` + `resolveRole` for the CLI
+attachment items.
+
+## Progress
+- Paths: projectCredentialsPath(dir, {signal, env}) (TrustOpts, like
+  trust.ts), userCredentialsPath(env). Done.
+
+## Dev helper
+- test/run-one.sh (excluded via info/exclude) bundles a single test file
+  with esbuild and runs it.
+- Loader: loadCredentialsSync (sync core, used by lookup) +
+  loadCredentials (async wrapper). zod strictObject for shape/exact case;
+  version, provider names, empty keys (goTrimSpace) checked by hand.
+  Permission check via fstat on the open fd; message names `chmod 600`.
+- Save/delete: writeFileAtomic with dirMode 0o700 + chmodDir, prefix
+  `credentials-`, suffix `.json`, error prefix `write credentials`.
+  stored_at formatted as Go RFC3339Nano (fraction trimmed); existing
+  strings kept verbatim; null/absent written as 0001-01-01T00:00:00Z.
+- Store: `CredentialStore({project, user})` with sync lookup, plus async
+  `openCredentialStore(dir, env, {signal})` which resolves both paths up
+  front ('' = no scope). Successful loads cached; failures not cached.
+- CLI: removed the placeholder `configHooks`; `loadProjectConfig` now
+  always attaches `openCredentialStore(ctx.cwd, ctx.env)`.
+  Test: test/cli/stored-keys.ts (loadProjectConfig + resolveRole).
+
+## Readings
+- "A role that never reaches the stored step": tested with an env key on
+  a built-in endpoint and a custom-endpoint role; also asserted that a
+  role that does reach the broken file fails.
+- Deferred per ticket: review-level CLI cases (ticket 20), doctor (35).
+
+## Final gate
+- lint, typecheck, test:ts (3205 pass), go build, npm test: all pass.
+
+## Gotcha
+- A shell hook blocks Bash commands mentioning `credentials*` paths with
+  cat/sed/head; use Read/Edit tools (added to AGENTS.md).
+
+## 2026-11-18 11:42 -- ts-rewrite/10 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $6.81. Checked items: "The untracked-path glob matcher passes the spec 2.14 cases (pure test).", "Aborting the signal during a large `gitPatch`, and during a best-effort step, kills git and rejects with an `AbortError`.".
+
+### Agent notes
+# Ticket 10 notes
+
+## Approach
+- Fast iteration: /tmp/rt10.sh bundles one test file with esbuild and runs it.
+- Test repos: test/scope/helpers.ts newRepo() isolates HOME, XDG_CONFIG_HOME,
+  GIT_CONFIG_GLOBAL (a file per repo), GIT_CONFIG_NOSYSTEM; identity via env.
+  build() gets the git environment through an `env` field on BuildOpts
+  (extension to the spec's BuildOpts: the shared git runner takes the CLI
+  context's env, and falls back to process.env when absent).
+
+## Progress
+- denylist (src/snapshot/denylist.ts, test/snapshot/denylist.ts): done.
+  src/scope/text.ts holds splitNul/decodePaths (denylist imports it).
+- glob, SectionCapper, build (default/staged/base/empty repo), renames,
+  fit, non-ASCII / non-UTF-8 names: done.
+- DIFF_CONFIG: git 2.49 rejects `-c diff.orderFile=` ("failed to read
+  orderfile ''"), so it is `diff.orderFile=/dev/null` (spec fallback).
+- Non-UTF-8 names: APFS refuses them, so the on-disk test skips on macOS;
+  an extra test stages such a name via `update-index --index-info` (no
+  file needed) so the decode/skip path runs everywhere. The skipped count
+  covers only names that feed `files` (diff name lists, ls-files --others),
+  deduped by raw bytes; linguist's ls-files is not counted (it would warn
+  about unchanged files on every review).
+- Huge-file RSS bound: plain peak RSS growth is ~14-37 MB regardless of
+  file size (V8 frees discarded 64 KiB pipe chunks only at an external
+  memory soft limit; allocator keeps pages). The test forces gc
+  (v8.setFlagsFromString('--expose-gc') + vm.runInNewContext('gc')) in
+  its sampler and asserts peak live memory (heapUsed + external) growth
+  < 3 MB and peak RSS growth < file size. Mutation check: buffering
+  stdout whole fails both.
+- Hardening (drivers, orderFile, denylist, symlinks), linguist, abort,
+  diffBytes/sort: done. Mutation checks: removing the orderFile override
+  fails staged/committed/uncommitted order; Go-style rename-detecting
+  linguist cached diff fails the staged-rename test.
+- Abort caveat: a best-effort catch that swallowed an abort would still
+  surface as AbortError (the next git call rejects on an aborted signal),
+  so the abort tests prove "kills git, rejects AbortError" but cannot
+  distinguish a swallowed abort externally. Every catch rethrows anyway.
+- Repo scope: `build` with scope "repo" throws "repo scope is not yet
+  supported" after the prelude (ticket 25 replaces it). No survey.ts yet.
+- Ticket-03 `gitRoot` re-exported from src/scope/index.ts.
+- Interpretation: tests are slices at build/fit/SectionCapper/glob/
+  denylist seams; where the implementation was a direct Go port written
+  ahead of a slice's test (renames, linguist, untracked), the red step was
+  the missing module, and mutation checks were used to confirm the tests
+  bite.
+- Final gates: lint, typecheck, test:ts (708 assertions), npm test
+  (go test ./... + launcher tests) all pass.
+- SectionCapper.skipDropped: while dropping, skips lines in place (no
+  per-line slices); only real line starts can be headers, matching Go's
+  fragment rule.
+
+## 2026-11-18 11:59 -- ts-rewrite/11 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $5.00. Checked items: none.
+
+### Agent notes
+# Ticket 11 notes
+
+## Approach
+- Fast loop: /tmp/rt11/rt.sh <test file> bundles one test with esbuild.
+- Every function that runs git takes trailing `opts:ContextOpts`
+  ({signal?, env?}) -- extension of the spec signatures, same as ticket
+  10's BuildOpts.env: tests pass the isolated repo env, the CLI (ticket
+  20) passes its context env. pinIndexTree(repo, signal, {env}) reads
+  GIT_INDEX_FILE from that env. resolveLive(repo, p, opts) instead of
+  (repo, p, signal). newQuoteGrounder(repo, tree, diff, opts) takes the
+  signal at construction.
+- "Injectable spawn" read as the repo's established seam: a fake `git`
+  first on the injected PATH that records its pid (same as ticket 10's
+  abort tests); the test asserts AbortError and that the pid is dead.
+- Shell hooks block commands with `.env`/`env:` text: write files with
+  the Write tool. The Write tool decodes `\uXXXX` escapes into literal
+  characters; a python pass re-escapes non-ASCII afterwards (checked with
+  grep -nP '[^\x00-\x7f]').
+
+## Files
+- src/context/: tree.ts, git.ts (ContextOpts, gitStream, gitCapped),
+  lines.ts (LineReader.readLineCapped), paths.ts, blob.ts, snippet.ts,
+  normalize.ts (ByteBuilder, WsNormalizer, normalizeWS), grounding.ts
+  (goUnquote, normalizedDiffSides, splitDiffByFile, newQuoteGrounder).
+- test/context/: helpers.ts (seeded rng, strings.Fields reference),
+  paths, normalize, grounding, snippet, tree, hardening, bounds.
+
+## Decisions / interpretations
+- "Live guard blocks exactly what pinning leaves out": compared over the
+  fixture's file paths (blocked list, served list, .gitignore). A
+  symlink (gitlink) is a 120000 blob in a plumbing-built capture, so
+  directories/symlinks are excluded from that comparison; whether the
+  snapshot keeps symlinks is ticket 22.
+- Diff header keys that are not valid UTF-8 are skipped (fail closed,
+  change 24 spirit). goUnquote copies raw bytes >= 0x80 (Go would turn
+  invalid ones into U+FFFD; such keys are skipped either way).
+- Parity kept: git appends a TAB to `---`/`+++` names containing a space;
+  Go (and this port) then key the section as "name\t", so such files
+  never ground via the diff. Not fixed (not a listed deliberate change).
+- numberedSnippet rejects only on abort; everything else is a notice.
+- LineReader returns the line with its trailing `\n` (Go readLineCapped);
+  `eof` is true when the stream ended during that read.
+
+## Progress
+All checklist items done; lint, typecheck, test:ts (1051) pass.
+
+## 2026-11-18 12:21 -- ts-rewrite/12 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $3.34. Checked items: "`explorationTools` returns exactly `read_file`, `list_files`, `grep_repo`, and the descriptions differ per tree (live, staged, captured worktree).", "`read_file` windows correctly, sets `more_below`, handles a window past EOF, coerces string offsets and limits, and behaves the same on staged and live trees, including pathological lines.", "A cut long line does not swallow the following line.", "A staged `read_file` serves the index rather than the worktree and reports a staged deletion as absent from the index.", "`offset`/`limit` of `1e30`, `"99999999999999999999"`, and `9007199254740993` clamp to 2^30 without an error; zero and negative values become 1.", "Huge single-line and huge multi-line blobs return bounded results and the child process is killed rather than drained (injectable spawn).", "`list_files` skips hidden directories, matches `**` at every depth, caps at 500 entries with a marker, and refuses `.git`, `build` (ignored), and `gitlink` (symlink to `.git`) as directories.", "`grep_repo` finds a literal match, returns an `error` for an invalid regexp, and returns a no-match result carrying `note` and a `searched` value that differs per tree.", "Live `grep_repo` sees untracked files under review and still honors `.gitignore`; staged `grep_repo` searches the index and its matches are not OID-prefixed.", "With `GIT_LITERAL_PATHSPECS=1` in the parent environment, live `grep_repo` still excludes untracked denylisted files, and the spawned child's environment has `GIT_LITERAL_PATHSPECS=0`.", "Invalid patterns `(` and `[a` return an `error`; a pattern valid for `new RegExp` but rejected by `git grep -E` returns an `error` from git's failure.", "No tool on a live or pinned tree serves `.git/config`, `.GIT/config`, `.Git/HEAD`, `gitlink/config`, an untracked `.env`, an ignored `build/out.go`, or an untracked `credentials.json`.", "Every tool result, encoded with `encodeToolResult`, stays within 65536 + 512 bytes for wide, tall, minified, and many-match files and for 400 long paths on live and pinned trees; `wide.txt` with `limit 3` returns `returned_range [1, 1]` and resumes at `offset >= 2`; grep and list mark truncation.", "Aborting the signal kills the child of a streamed `read_file` and of `grep_repo` (injectable spawn).", "`npm run lint`, `npm run typecheck`, and `npm run test:ts` pass, and the Go build and Go tests still pass.".
+
+### Agent notes
+# Ticket 12 notes (repository navigation tools)
+
+## Implemented
+- src/context/offset-limit.ts: parseOffsetLimit (Go fmt.Sscan port: a
+  bare leading `0` is octal, `0x`/`0o`/`0b`, `_` via strconv's
+  underscoreOK; values held as bigint so huge ones clamp to 2^30).
+- src/context/glob.ts: globstarMatch (segment DP over goPathMatch).
+- src/context/read-file.ts, list-files.ts, grep.ts, tools.ts
+  (`explorationTools(repo, tree, opts:{env})`, run(args, signal)).
+- Tests: test/context/tools-{helpers,offset-limit,glob,read-file,
+  list-files,grep,hardening}.ts, imported from test/index.ts.
+
+## Interpretations
+- explorationTools takes a third `opts` ({env}) like ticket 11's
+  ContextOpts: the CLI passes its context env, tests the repo env. The
+  signal comes per call from Tool.run.
+- Abort is not a model-caused failure: run() rejects with the signal's
+  AbortError (and the child is killed); everything else is {error}.
+- "Injectable spawn" = a fake `git` first on the injected PATH
+  (fakeGit/onArg in tools-helpers.ts), as in ticket 11. The endless blob
+  test execs `yes`; the env test records the child's
+  GIT_LITERAL_PATHSPECS.
+- Byte caps in read_file/grep are counted on the decoded (U+FFFD) text,
+  so the bound holds on what the model sees; equals Go for valid UTF-8.
+- Parity kept: truncatedLines records cut lines before `offset` too
+  (spec 2.8 step 5.2), so a window far into a file of many cut lines
+  could grow the trailer past 512 bytes, as in Go.
+- A p
+[truncated]
+
+## 2026-11-18 12:26 -- ts-rewrite/14 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Subagents: 0. Cost: $5.75. Checked items: none.
+
+### Agent notes
+# Ticket 14 notes (agent loop and token ledger)
+
+## Seams
+- Ledger: unit (test/llm/ledger.ts).
+- Agent loop: runConversation / createClient driven by a scripted fake
+  ModelClient (test/llm/agent-*.ts), injected now/sleep/sessionId.
+- [HTTP, chat] items: createClient over the real chat ModelClient and
+  startInferenceServer.
+
+## Progress
+All checklist items implemented and committed; lint, typecheck,
+test:ts (1904 assertions), go build, and npm test pass.
+
+## Implemented
+- src/llm/ledger.ts (Ledger, newLedger, reserve, committed,
+  weightedTokens; plus `outstanding()` for the mid-flight abort test).
+- src/llm/deadline.ts (WorkDeadline: check, callSignal, runTool).
+- src/llm/final-args.ts (parsePreservingIntegers, checkRequired,
+  typeValidate, decodeArgs).
+- src/llm/retry.ts (withStepRetry, retryDelay, defaultSleep).
+- src/llm/messages.ts (transcriptBytes).
+- src/llm/review.ts (pure reviewResponse; returns stopCause {kind, text}).
+- src/llm/agent.ts (Conversation class + runConversation, constants).
+- src/llm/errors.ts: StopCauseKind, ErrorDetails.stopCause is now a kind,
+  ErrorDetails.cause (cutoff cause text), cutoffError,
+  FinalArgumentsError (precedence 2; no sentinel, Go parity).
+- src/llm/types.ts: TurnInfo, FinalSpec, ConverseOptions, RecordUsage,
+  Client.
+- src/llm/client.ts: createClient; DEFAULT_MAX_ATTEMPTS now lives in
+  agent.ts and is re-exported from client.ts.
+- Tests: test/llm/ledger.ts, agent-finalization.ts, agent-deadline.ts,
+  agent-dispatch.ts, agent-http.ts, agent-helpers.ts (fake ModelClient);
+  test/live/deepseek.ts + `npm run test:live`.
+
+## Decisions / readings
+- TDD order: the ledger went strictly red -> green. The loop shell
+  (agent.ts) is one tightly coupled unit, so it was written against spec
+  07 and Go agent.go first, then each checklist item got tests; I
+  mutation-checked each group (removing block, bounds, buffered-abort
+  guard, schema clone, sequential dispatch, abnormal-finish guard, etc.)
+  and every mutation but one fails a test. The unobservable one: clearing
+  `finalErr` on a provisional rejection -- in this design a non-null
+  finalErr always stops the loop, so the clear cannot be seen.
+- Debug tracing (`roast:llm`) is NOT wired: AGENTS.md says no src module
+  may import @substrate-system/debug until it passes the license
+  allowlist. Add tracing when that is resolved.
+- "Automatic tool choice" at the fake seam is structural (ModelRequest
+  has no tool-choice field; the chat encoder always sends "auto"); the
+  HTTP test asserts body.tool_choice === "auto" on every request
+  including final-phase ones for deepseek-reasoner.
+- Request timeout is owned by ModelClient.send (ticket 13), so
+  WorkDeadline.callSignal composes only caller + deadline/window. The
+  request-timeout-buffered-call item is tested over HTTP (server sends a
+  tool-call chunk and stalls).
+- The deadline timer is AbortSignal.timeout(deadline - now + 1ms) so it
+  never fires before the clock check reports the deadline.
+- `details.stopCause` kinds: finish-reason, recorded-before-cutoff,
+  kept-recording, schema-mismatch, tool-call-validation,
+  answered-without-final, other-tools-instead,
+  deadline-during-finalization, invalid-arguments.
+- Live tests were run only without a key (both skip); the live path
+  itself is unexercised here.
+- goJsonStringify (spec 3.4 tool-json.ts) was not added: the ticket says
+  there is no second JSON encoder; tool results use encodeToolResult. A
+  bigint in an exploration tool result therefore serializes as
+  {"error": ...} rather than digits.
+
+## 2026-11-22 01:37 -- ts-rewrite/16 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Ticket 16
+
+Seams: spec-approved review unit tests, scripted ModelClient, and real
+chat Client against the local HTTP inference server. No CLI wiring.
+Use TDD per acceptance item and targeted esbuild bundles while iterating.
+Initial checkout clean; no review-area AGENTS.md exists.
+
+- Item 1: parsing/ranking tests failed on missing module, then 13/13 pass.
+  Canonical parsing uses shared Go whitespace; ranking stays case-sensitive.
+- Item 2: missing exports red; 32/32 targeted assertions and typecheck green.
+  Added finding/result types and minimal Verdict; output assembly remains
+  the render area's responsibility, Result uses spec's dropped/stopReason.
+- Item 3: validation module missing red, 22/22 assertions green, typecheck
+  green. Gate precedence, untrimmed grounding, strict floor, and assessment
+  promotion/demotion covered. Identity assignment is required by validate.
+- Item 4: canonicalization was inseparable from item 3's gate. Removed it
+  temporarily: new assertions fail twice; restored: 27/27 green. Raw
+  invalid severities and input immutability covered.
+- Item 5: injected UUID source forces overlapping prefixes across kept
+  and dropped findings. Disabling alias lengthening fails four assertions;
+  restored implementation passes 38/38. Existing ids preserved.
+- Item 6: empty-lines-to-array mutation fails two assertions; restoring
+  required toFinding conversion gives 37/37. Nonempty lines copied and
+  wire field order verified. Items 4-6 verify shared item 2/3 behavior
+  via mutation reds rather than introducing duplicate implementations.
+- Item 7: missing-module red, 13/13 green. Go sha256 + strings.Fields
+  baseline algorithm independently produced 8e82a535023eb3bb for a.ts and
+  return/value with U+0085. Checked in literal vector; no runtime Go needed.
+- Item 8: missing-module red; exact schemas copied from spec 2.3 into
+  independent JSON fixture. Deep equality, key order and recursive freeze
+  pass (70 assertions). Source formatting handled by project's eslint.
+- Item 9: missing-decoder red; 119 assertions green. Decoders return the
+  spec's ok/value or error union. Unknown wrong-case keys ignored, leaving
+  zero severity (validation rejects it). Null zeros, field types, duplicate
+  keys, surrogate repair, integer lexemes and int64 bounds covered.
+  Necessary client seam extension: FinalSpec.decode gets optional rawText;
+  typeValidate passes it. Existing decoders remain compatible. Without it
+  3 and 3.0 are indistinguishable after parsing. Confidence accepts decimal
+  and exponent forms; reported maps retain float64 round-trip behavior.
+- Item 10: missing finder red, 14/14 green. Scripted actual client covers
+  structured and interactive validation and tool order. Initial fixture
+  used two same-fingerprint findings: correctly deduped; changed second
+  file to test independent validation. Agent-owned continue tool is
+  excluded when checking finder-owned tool list.
+- Item 11: real scripted loop threw cutoff before implementation; 32/32
+  now pass, covering all stop reasons and preserved cause. A ledger too
+  small even for wrap-up makes zero requests, and its error has no model
+  name; tests assert its token-budget cause instead.
+- Item 12: early-report omission mutation fails 9 assertions; restored
+  implementation passes 48/48. Capture observed before next model request;
+  cutoff retains valid findings and dropped-only runs stay incomplete.
+- Item 13: omitting submission merge fails existing and new tests;
+  restored passes 58/58. Accumulator last-wins/first-order, count, captures
+  on replacements and merges, and retained unsubmitted reports covered.
+- Item 14: successful deadline wrap-up failed three assertions; now 67/67
+  green. Callback flags mark accepted wrap-up incomplete; deadline wins.
+  Auth errors and caller abort propagate as the same object in both modes.
+- Item 15: 
+[truncated]
+
+## 2026-11-22 01:48 -- ts-rewrite/17 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Ticket 17 attempt
+
+Seams: spec-approved render functions and exit helper, with real writable
+streams for destination checks. No review CLI wiring (ticket 20).
+Use one red/green cycle and commit per acceptance item.
+Initial checkout clean. Read root and review AGENTS, CONTEXT, TS notes,
+ADR-0004, spec 00 and 09, and Go rendering baseline/tests.
+
+1. JSON round-trip and ordered fields: missing-module red, 7 assertions
+green and typecheck pass. Report uses optional Go-zero fields and a
+nullable notes boundary; client usage already uses RecordUsage.
+
+2. Absent vs empty collections: missing finding lines failed deepEqual;
+normalizing absent lines to null gives 19/19. tapzero equal is loose: use
+deepEqual to distinguish null from undefined. Other nullable defaults
+were already required by item 1.
+
+3. Truncation metadata: four red assertions, 26/26 green. Output size
+entries explicitly retain path/bytes order.
+
+4. Survey: missing export red, 13 assertions green. Normal cutoff state
+retained per spec 2.7 despite abbreviated ticket wording. Survey owns
+stop_reason when active; banner tested by blockquote structure.
+
+5. Raw JSON and budgets: absent budgets red, 33/33 green. Recursive
+sorting preserves arrays; usage role and field orders explicitly built.
+
+6. Hostile Markdown: eight red assertions, 26/26 green plus typecheck.
+All control ranges exercised, fence delimiters exceed content runs,
+continuations indented, inline path backticks padded. JSON raw roundtrip
+remains intact. Pure Markdown block helper separated from report assembly.
+
+7. Ordering: alias-order assertion red; stable effective-severity then
+confidence sort passes 28/28, input array unchanged.
+
+8. Dropped visibility: six reds; 37/37 pass with opt-in section, stored
+order, sanitized tags and fallback reason, missing-code placeholders.
+
+9. Recalibration: two red assertions; 46/46 green. Confirmed lowering
+only; equal/upward/invalid/undecided unchanged. Go half-even confidence
+and U+0085 trimming covered.
+
+10. Headline branches and verdict rendering: 14 Markdown reds and missing
+JSON verdict red; 69 Markdown + 41 JSON assertions pass, typecheck and
+lint pass. Added optional verdict fields to review type, preserving old
+callers with Go-zero defaults. JSON verdict order and optional omission
+covered here too. Finding verifier reasoning remains out of Markdown.
+
+11. Writer: missing export red; real Writable tests pass 6/6 with
+format destinations, trailing newline and JSON-first order. I/O isolated
+in write.ts and re-exported by render.ts as specified. Typecheck passes.
+
+12. Exit mapping: missing module red, 67/67 assertions pass plus typecheck.
+Full severity/gate/partial matrix, lowering and dropped/refuted immunity.
+Filter refuted defensively before shared maxSeverity; normal verifier
+results already move refutations into dropped.
+
+13. Verification-only acceptance item: no new test-first code needed.
+Added reusable src/render/AGENTS.md before final commit. Lint, typecheck,
+and go build ./... pass. Full npm test invoked once, and npm run test:go
+are running; final outcomes to follow. No dependency installation.
+No project .roast directory leaked into checkout. All commits so far
+cover one checklist item; final commit will cover verification/notes.
+
+Final verification: npm test exits 0, 5351/5351 assertions; npm run
+test:go exits 0 (all Go packages plus 22/22 launcher/release tests).
+Lint and explicit typecheck exit 0; go build ./... exits 0.
+Final whitespace-only line wrapping checked with targeted eslint.
+git diff --check passes; every new source/test line is under 80 columns
+and ASCII. All 13 acceptance items completed.
+
+## 2026-11-23 10:43 -- ts-rewrite/18 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Ticket 18
+
+Seam: the ticket-approved record module APIs, real temporary Git repos
+and files. No CLI wiring. Existing tempRepo isolates home/config and Git.
+All calls receive a resolved records directory or injected cwd/env.
+
+Spec precedence: spec.md says no HTML or U+2028/U+2029 escaping; this
+overrides the contradictory older area 2.11 text. Preserve JSON values.
+No dependencies installed. Initial checkout clean.
+
+1. Missing-module red; 3 assertions green plus typecheck. Root lookup uses
+the shared runner and injected environment; no override.
+
+2. Missing-export red; 6 assertions green. makeRunDir creates private
+directories; existing state and ignore files are preserved.
+
+6. Missing-module red; run ID shape, UTC date and uniqueness green.
+
+7. Missing-module red; 28 assertions plus typecheck green. Added typed
+meta contract, ordered serialization, atomic fixed .tmp rename, private
+files and lossless gzip inputs. Read-side legacy/default validation follows
+in item 8. Serialization ignores extra runtime fields by construction.
+
+8. Missing wireProtocol export red; 39 assertions and typecheck green.
+Legacy api fallback, exact-case keys, unknown-key removal, Go null/zero
+defaults and invalid field types/numeric lexemes covered. Read results
+include Go-zero optional fields, so compare populated replay values.
+
+9. Missing-export red; captureEnv exclusion matrix green (40 total).
+Only names of defined ROAST_ variables enter the record.
+
+10. Missing-module red; 46 assertions plus typecheck green. Recorder
+serializes appends and fsyncs, sequence advances after success only.
+
+11. Raw SSE failed JSON-only recorder; 56 assertions plus typecheck now
+green. Textual JSON compaction keeps duplicate keys, huge integers and
+number lexemes. UTF-8 SSE validation preserves BOM and CRLF. Invalid
+bodies are rejected before disk effects, with value-free JSON errors.
+
+12. Missing digest export red; raw SHA256 oracle, published abc vector
+and invalid-UTF8 gzip roundtrip pass (60 assertions).
+
+13. Missing module red; local month boundary, all index fields,
+refuted counts, fingerprints, packs, repeated appends and best-effort
+failures green (78 assertions), typecheck green.
+
+4. Existing openPrivate already owns index tightening. New permission
+test killed its chmod mutation (420 vs 384); restored helper passes all
+81 assertions. Index appends deliberately preserve the runs directory mode.
+
+14. Missing-export red; 91 assertions plus typecheck green. Prior scan
+streams with 4 MiB line cap, filters repositories, skips malformed
+lines, respects lookback/default, and keeps first line in newest month.
+
+15. Missing exports red; report roundtrip and prefix resolution green,
+including ambiguous/missing and symlink/file nonmatches (97 assertions).
+
+3. Missing finding-spill module red; permissions integration passes 148
+assertions with typecheck. New/old files, leftover .tmp, all write paths,
+parent modes and repeated spills covered. Added recordRepo fixture which
+chdirs and isolates home/config for every record test. Lint identified
+formatting only; targeted --fix applied and focused tests still green.
+
+5. Missing removeRun export red; 210 assertions plus typecheck green.
+All public name-taking APIs reject traversal before disk effects. Remove
+valid run works, no-dir removal is inert, invalid removal preserves state.
+Also reject backslash and NUL for plain-name safety.
+
+16. Final validation complete. Extra Unicode map-order test failed twice
+against renderer-derived ordering; index now sorts budgets recursively
+and usage role keys bytewise while retaining usage struct field order.
+Focused suite: 223/223 assertions. Added timestamp/JSON vectors and
+credential runtime-field exclusion checks. Reusable source conventions
+recorded in src/record/AGENTS.md before this final commit.
+
+Final gates: npm test ran once, exit 0, 5788/5788 assertions.
+np
+[truncated]
+
+## 2026-11-23 15:46 -- ts-rewrite/19 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+Ticket 19. Seams: ticket-authorized tar/bundle module APIs against real
+files in recordRepo temporary Git repos, plus a fresh Node process.
+No CLI integration (ticket 20). Using tdd and coding-effectively.
+
+Item 1: existing tar implementation was broken. Corrected tests whose
+expectations contradicted the spec: empty data has no padding block,
+512 x bytes remain x, NUL type changes require checksum refresh, and
+ordinary files named PaxHeaders are not automatically extension headers.
+Replaced the ~16 GiB allocation with a typed array length boundary probe.
+Go generator uses archive/tar and the unchanged baseline runbundle package
+(git diff cd08f10 -- internal/runbundle/bundle.go is empty). Captured full
+meta, long, Unicode tar and compressed Go bundle fixtures. No divergence.
+Red: checksum/roundtrip/PAX failures. Green: focused tar 1568 assertions.
+Tar core includes PAX because pre-existing roundtrip tests require it.
+
+Item 2: discovered pre-existing bundle.ts and an unregistered bundle test
+module after the first probe. Retained the original module tests; new
+focused tests live in determinism.ts. Identical bytes/digests already
+passed after tar repair, but zstd frame checksum assertion failed.
+Replaced unsupported compressionLevel option with documented spec params
+(level 3, checksum 1); focused 7/7 pass. Original test module contains
+several placeholder tests; these will be strengthened in their own items.
+
+Item 3: reused existing behavior; tests already green, no implementation
+needed. New test proves unchanged inode/mtime/bytes/digest/size after
+artifacts change, and cached bundle permissions are tightened. 6/6 pass.
+There is no honest red implementation step for already-correct behavior.
+
+Item 4: real symlink, FIFO (no root privileges), reserved manifest,
+invalid cache, target preservation and failed-build cleanup tests 8/8.
+Existing checks passed; code review found path-based stat after read was
+not the specified descriptor identity check. Artifact reads now use
+O_NOFOLLOW/O_NONBLOCK, fstat and dev/ino validation before reading bytes,
+and close the descriptor on all paths. This also prevents a swapped FIFO
+from blocking after lstat. No race timing claims made by these tests.
+
+Item 6 (before 5, so permission observation uses the real lock): red
+showed existing writeFileSync silently truncated the live lock. Exclusive
+wx creation now provides the mutex, and reclaim follows the specified
+10-minute contract. Compression opens the existing lock with TRUNC but
+without CREATE. Focused contention/stale/cleanup tests 5/5 pass.
+
+Item 5: existing permission behavior passes. Fresh child builder and
+filesystem watcher observe the actual exclusive lock while held (32 MiB
+artifact gives the observer time without sleeps or mocked filesystem).
+Checks directory, published file, live lock, and raw tar mode fields.
+7/7 focused assertions. No additional production mutation needed.
+Permission harness initially bundled esbuild into ESM and failed on
+__filename. Corrected it to load esbuild via createRequire and use shared
+baseOptions plus the require banner. The 7/7 result above is after this
+correction. An accidental commit occurred before checking the redirected
+log; immediately amended after the harness passed.
+
+Item 7: tar red/green and Go oracle fixture coverage landed with item 1.
+New bundle integration checks full names, raw x header count, exact UTF-8
+PAX record lengths and terminators, plus UTF-8 byte ordering that differs
+from UTF-16 ordering. 11/11 pass; no new production change needed.
+PAX raw-header observer initially stopped at a zero first name byte,
+which is valid for an all-non-ASCII fallback. Fixed to detect a full zero
+block. Actual final PAX focused result: 11/11. Inspect TAP totals, because
+this pre-existing single-file runner can exit 0 despite failed assertions.
+
+Item 8: Go-built compressed fixture 
+[truncated]
+
+---- AGENT INSTRUCTIONS ----
+You are an autonomous coding agent. Implement the ticket using /tdd.
+
+Follow these rules:
+- Read the files directly relevant to the ticket before writing code. Also read any AGENTS.md in or above the directories you will touch, plus CONTEXT.md and the relevant docs/adr/ entries if they exist. If they do not exist, proceed silently.
+- Work ONLY on this ticket. Do not fix unrelated problems you notice.
+- Do NOT research external APIs or services via web search. Use the spec and ticket body as your sole reference for API shapes.
+- Dependencies are already installed with `npm install --prefer-offline --no-audit --no-fund --no-package-lock`. Do NOT reinstall them with any other command; to reinstall, run that same command. To add a dependency, use the package manager that command uses, so its lockfile stays in sync.
+- Use /tdd for every checklist item. For each item, write a failing test at the seams named in the spec's Testing Decisions section, then write only enough code to make it pass, then refactor. For a checklist item that is pure scaffolding, config, or docs (where a test adds no value), skip test-first and record that decision in your notes file.
+- While iterating, run only the tests relevant to what you changed. Run `npm test` in full once, as the final gate before your last commit. Do not commit with failing tests. The orchestrator runs the same command after you exit and rejects the ticket if it fails.
+- If the project has a lint script, run it and fix what it reports.
+- INTEGRITY: never delete, skip, weaken, or write tautological tests to force a green result. Only report a checklist item done when its real tests genuinely pass. If an item cannot be completed honestly, leave it unchecked and record what blocked you in your notes file.
+- Do NOT read or modify files outside your current directory (the worktree).
+- Do NOT run git push.
+- Commit after each checklist item, and make sure everything is committed when finished, except your notes file.
+- Keep notes for this attempt in `.redeye/notes.md` (create the directory). Update it after each checklist item and as soon as you hit a blocker, not only at the end. Record what you implemented, files changed, how you read any vague acceptance criteria, what blocked you, and anything the next attempt at this ticket should know. Never commit, git add, or delete this file; the orchestrator collects it.
+- After completing each checklist item in the ticket, print a line: [x] <item text> (matching the checklist text exactly).
+- Before your final commit, record reusable learnings in the nearest AGENTS.md (in or above the directories you modified; prefer that over the repo root). Good additions: module conventions, gotchas, files that must change together, how to test that area, environment requirements. Do NOT add ticket-specific details or temporary debugging notes. Only write when you have knowledge that would help future work in that directory. Reusable patterns go in AGENTS.md; anything specific to this ticket goes in your notes file.
+
+hook: SessionStart
+hook: SessionStart Completed
+ERROR: You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 8:29 PM.
+ERROR: You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 8:29 PM.

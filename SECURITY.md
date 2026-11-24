@@ -2,15 +2,16 @@
 
 ## Supported versions
 
-Only the latest tagged release receives security fixes. Older releases and
-unreleased builds from `main` are not supported.
+Only the latest version of `@substrate-system/roast` published to npm
+receives security fixes. Older versions and unreleased builds from `main` are
+not supported.
 
 ## Reporting a vulnerability
 
 Do not report a possible vulnerability in a public GitHub issue or discussion.
 Email `security@bsky.app` with:
 
-- the affected Roast version and operating system;
+- the affected Roast version (`npx roast --version`) and operating system;
 - the configured wire protocol, with credentials and private endpoints removed;
 - the security impact and conditions required to trigger it; and
 - a minimal reproduction or relevant logs, with secrets and unrelated source

@@ -1,0 +1,166 @@
+{
+  "wire": {
+    "additionalProperties": false,
+    "properties": {
+      "code_quote": {
+        "description": "Verbatim copy of the cited lines, exactly as they appear in <files>",
+        "type": "string"
+      },
+      "confidence": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "cwe": {
+        "description": "CWE id when applicable, else empty string",
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "file": {
+        "type": "string"
+      },
+      "fixed_code": {
+        "description": "Concrete replacement for code_quote that resolves the issue",
+        "type": "string"
+      },
+      "frontend_category": {
+        "description": "Which frontend-addendum dimension produced this finding; empty for non-frontend findings",
+        "enum": [
+          "",
+          "hooks",
+          "security",
+          "a11y",
+          "perf",
+          "ts"
+        ],
+        "type": "string"
+      },
+      "lines": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "reasoning": {
+        "type": "string"
+      },
+      "severity": {
+        "enum": [
+          "INFO",
+          "LOW",
+          "MEDIUM",
+          "HIGH",
+          "CRITICAL"
+        ],
+        "type": "string"
+      }
+    },
+    "required": [
+      "reasoning",
+      "severity",
+      "confidence",
+      "cwe",
+      "description",
+      "file",
+      "lines",
+      "code_quote",
+      "fixed_code",
+      "frontend_category"
+    ],
+    "type": "object"
+  },
+  "response": {
+    "additionalProperties": false,
+    "properties": {
+      "assessment": {
+        "enum": [
+          "FINDINGS_PRESENT",
+          "NO_FINDINGS"
+        ],
+        "type": "string"
+      },
+      "findings": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "code_quote": {
+              "description": "Verbatim copy of the cited lines, exactly as they appear in <files>",
+              "type": "string"
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "cwe": {
+              "description": "CWE id when applicable, else empty string",
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            },
+            "fixed_code": {
+              "description": "Concrete replacement for code_quote that resolves the issue",
+              "type": "string"
+            },
+            "frontend_category": {
+              "description": "Which frontend-addendum dimension produced this finding; empty for non-frontend findings",
+              "enum": [
+                "",
+                "hooks",
+                "security",
+                "a11y",
+                "perf",
+                "ts"
+              ],
+              "type": "string"
+            },
+            "lines": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "reasoning": {
+              "type": "string"
+            },
+            "severity": {
+              "enum": [
+                "INFO",
+                "LOW",
+                "MEDIUM",
+                "HIGH",
+                "CRITICAL"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "reasoning",
+            "severity",
+            "confidence",
+            "cwe",
+            "description",
+            "file",
+            "lines",
+            "code_quote",
+            "fixed_code",
+            "frontend_category"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "assessment",
+      "findings"
+    ],
+    "type": "object"
+  }
+}

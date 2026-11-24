@@ -1,0 +1,58 @@
+npm warn using --force Recommended protections disabled.
+npm notice run @substrate-system/roast@0.0.0 test
+npm notice run go test ./... && npm run build:launcher && node --test "test/**/*.test.ts"
+?   	github.com/bluesky-social/roast/cmd/roast	[no test files]
+ok  	github.com/bluesky-social/roast/internal/buildinfo	(cached)
+ok  	github.com/bluesky-social/roast/internal/cli	(cached)
+ok  	github.com/bluesky-social/roast/internal/config	(cached)
+ok  	github.com/bluesky-social/roast/internal/context	(cached)
+ok  	github.com/bluesky-social/roast/internal/credentials	(cached)
+ok  	github.com/bluesky-social/roast/internal/gate	(cached)
+ok  	github.com/bluesky-social/roast/internal/llm	(cached)
+ok  	github.com/bluesky-social/roast/internal/prompts	(cached)
+ok  	github.com/bluesky-social/roast/internal/record	(cached)
+ok  	github.com/bluesky-social/roast/internal/render	(cached)
+ok  	github.com/bluesky-social/roast/internal/review	(cached)
+ok  	github.com/bluesky-social/roast/internal/runbundle	(cached)
+ok  	github.com/bluesky-social/roast/internal/scope	(cached)
+ok  	github.com/bluesky-social/roast/internal/skill	(cached)
+ok  	github.com/bluesky-social/roast/internal/snapshot	(cached)
+ok  	github.com/bluesky-social/roast/internal/testutil	(cached)
+ok  	github.com/bluesky-social/roast/internal/textsafe	(cached)
+?   	github.com/bluesky-social/roast/internal/trust	[no test files]
+ok  	github.com/bluesky-social/roast/internal/verify	(cached)
+?   	github.com/bluesky-social/roast/node_modules/flatted/golang/pkg/flatted	[no test files]
+ok  	github.com/bluesky-social/roast/scripts	(cached)
+npm warn using --force Recommended protections disabled.
+npm notice run @substrate-system/roast@0.0.0 build:launcher
+npm notice run tsc -p tsconfig.launcher.json
+✔ passes when every tarball holds its dist contents (710.376541ms)
+✔ fails when a platform tarball lacks its binary (484.102958ms)
+✔ fails when a platform tarball lacks license notices (475.779334ms)
+✔ fails when a built binary is left out of the tarball (439.682291ms)
+✔ fails when the root tarball lacks the launcher (445.182458ms)
+✔ fails when the root tarball lacks the schema (445.894208ms)
+✔ fails when a platform tarball lacks Roast's own license (436.185958ms)
+✔ fails when the root tarball lacks Roast's own license (472.4155ms)
+✔ fails when a packed manifest declares no license (439.816833ms)
+✔ passes arguments, stdin, stdout, and stderr through (325.626333ms)
+✔ exits with the binary exit code (456.146959ms)
+✔ names the expected package when the platform package is missing (42.040333ms)
+✔ installing the root package pulls in only the platform packages (1.687083ms)
+✔ passes when every binary exists and every version matches (241.764167ms)
+✔ refuses when a binary is missing (228.709833ms)
+✔ refuses when license notices are missing (216.851125ms)
+✔ refuses when a platform package version differs (204.994459ms)
+✔ refuses when an optional dependency version differs (186.860083ms)
+✔ builds, then publishes platform packages before the root package (573.035458ms)
+✔ does not publish when the build fails (273.1465ms)
+✔ publishes nothing when a platform package version does not match (323.425958ms)
+✔ npm version writes the new version into every platform package (576.890375ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4459.264875

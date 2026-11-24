@@ -13,99 +13,54 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  quality:
-    name: Test and build
-    runs-on: ubuntu-26.04
+  test:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-latest]
+        node: [22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            .github/tools/*/go.sum
+          node-version: ${{ matrix.node }}
 
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Check formatting
-        shell: bash
+      - name: Install npm dependencies
+        # .npmrc sets package-lock=false, so no lockfile is committed. Write
+        # one from package.json so npm ci can install from it.
         run: |
-          set -euo pipefail
-          unformatted="$(gofmt -l .)"
-          if [[ -n "${unformatted}" ]]; then
-            echo "${unformatted}"
-            exit 1
-          fi
+          npm install --package-lock-only --package-lock=true --no-audit --no-fund
+          npm ci --no-audit --no-fund
 
-      - name: Check module files
-        run: |
-          set -euo pipefail
-          go mod tidy
-          for modfile in .github/tools/*/go.mod; do
-            (cd "${modfile%/*}" && go mod tidy)
-          done
-          git diff --exit-code -- go.mod go.sum .github/tools
-          # git diff alone does not report a missing go.sum recreated by tidy.
-          test -z "$(git ls-files --others --exclude-standard -- go.mod go.sum .github/tools)"
+      - name: Lint
+        run: npm run lint
 
-      - name: Check workflows and shell scripts
-        run: |
-          go tool -modfile=.github/tools/actionlint/go.mod actionlint
-          shellcheck scripts/*.sh
-
-      - name: Check release configuration
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          version: v2.20.1
-          args: check
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
-        run: go test -race ./...
+        # Builds dist/cli.js, then runs the test bundle.
+        run: npm test
 
-      - name: Vet
-        run: go vet ./...
+      - name: Check the generated schema is committed
+        run: git diff --exit-code -- roast.schema.json
 
-      - name: Staticcheck
-        # Keep the importer compatible with the compiler without adding
-        # CI-only tool dependencies to Roast's runtime module.
-        run: go tool -modfile=.github/tools/staticcheck/go.mod staticcheck ./...
-
-      - name: Build upload broker
-        run: go build ./cmd/roast-broker
-
-      - name: Compile Windows
-        env:
-          CGO_ENABLED: "0"
-          GOARCH: amd64
-          GOOS: windows
-        run: go build -o /tmp/roast.exe ./cmd/roast
-
-      - name: Set up container builder
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Build broker image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          load: true
-          tags: roast-broker:ci
-          cache-from: type=gha,scope=broker
-          cache-to: type=gha,scope=broker,mode=max
-
-      - name: Smoke test broker image
-        run: bash scripts/test-broker-image.sh roast-broker:ci
+      - name: Check package contents
+        # Packs in dry-run mode; nothing is published.
+        run: npm run check:pack
 
   security:
-    name: Security and licenses
+    name: Security
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -118,23 +73,48 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        # Only for the CI tool modules under .github/tools.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            .github/tools/*/go.sum
+          go-version-file: .github/tools/gitleaks/go.mod
+          cache-dependency-path: .github/tools/*/go.sum
 
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Check tool module files
+        run: |
+          set -euo pipefail
+          for modfile in .github/tools/*/go.mod; do
+            (cd "${modfile%/*}" && go mod tidy)
+          done
+          git diff --exit-code -- .github/tools
+          # git diff alone does not report a missing go.sum recreated by tidy.
+          test -z "$(git ls-files --others --exclude-standard -- .github/tools)"
+
+      # There is no root Go module, so each tool runs from its own module
+      # directory (go -C) and is pointed back at the repository.
       - name: Scan Git history for secrets
-        run: go tool -modfile=.github/tools/gitleaks/go.mod gitleaks git --redact --no-banner .
+        run: go -C .github/tools/gitleaks tool gitleaks git --redact --no-banner "${PWD}"
 
-      - name: Check reachable vulnerabilities
-        run: go tool -modfile=.github/tools/govulncheck/go.mod govulncheck ./...
+      - name: Check workflows
+        # actionlint finds the repository root and .github/actionlint.yaml
+        # by walking up from its module directory.
+        run: go -C .github/tools/actionlint tool actionlint
 
-      - name: Check dependency licenses
-        run: >-
-          go tool -modfile=.github/tools/licenses/go.mod go-licenses check ./...
-          --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0,Unlicense
+      - name: Check the hook script
+        run: shellcheck src/gate/pre-commit.sh
 
-      - name: Generate release license notices for all targets
-        run: bash scripts/licenses.sh
+      - name: Install npm dependencies
+        # .npmrc sets package-lock=false, so no lockfile is committed. Write
+        # one from package.json so npm ci can install from it.
+        run: |
+          npm install --package-lock-only --package-lock=true --no-audit --no-fund
+          npm ci --no-audit --no-fund
+
+      - name: Audit npm dependencies
+        # Without --omit=dev: the bundled runtime libraries are
+        # devDependencies.
+        run: npm audit --audit-level=high

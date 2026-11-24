@@ -1,0 +1,1934 @@
+{
+  "project": "Roast",
+  "branchName": "ralph/ts-rewrite",
+  "description": "Finish the TypeScript rewrite from unfinished tickets.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Ticket 19: Write Go-compatible tar archives",
+      "description":
+        "As a user, I want portable run archives so I can inspect evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement writeTar in src/runbundle/tar.ts.",
+        "The meta.json fixture is 2048 bytes with Go-identical headers.",
+        "Use mode 0600, zero IDs/times, correct checksums and padding.",
+        "End with two zero blocks; reject files of at least 8 GiB.",
+        "Write PAX path records for long and non-ASCII names.",
+        "Long and non-ASCII tar fixtures match Go or document differences.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Ticket 19: Read tar archives with PAX and signed checksums",
+      "description":
+        "As a user, I want portable run archives so I can inspect evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement readTar in src/runbundle/tar.ts.",
+        "Read unsigned and signed checksums, prefixes, and PAX x/g records.",
+        "Validate PAX lengths and let path override the next entry name.",
+        "Accept NUL regular-file typeflags and preserve full PAX names.",
+        "Expose unsupported GNU L entries for rejection by verification.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Ticket 19: Parse manifests and verify the Go fixture",
+      "description":
+        "As a user, I want checked archives so I can trust stored evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement verifyBundle and types in src/runbundle/bundle.ts.",
+        "Verify the checked-in bundle fixture produced by the Go baseline.",
+        "Reject unknown or mis-cased manifest keys and trailing JSON data.",
+        "Validate manifest integer types, sorted paths, sizes, and digests.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Ticket 19: Reject invalid bundle archive contents",
+      "description":
+        "As a user, I want checked archives so I can trust stored evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement archive content checks in src/runbundle/bundle.ts.",
+        "Reject digest mismatch, invalid PAX lengths, and GNU L entries.",
+        "Accept regular entries whose typeflag is NUL.",
+        "Follow spec/10-records.md 2.13 for every verification invariant.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Ticket 19: Build deterministic bundle bytes from sorted files",
+      "description":
+        "As a user, I want stable bundles so saved runs remain verifiable.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement buildBundle in src/runbundle/bundle.ts.",
+        "Implement buildBundle, its constants, and lock error type.",
+        "Identical files yield identical bundle bytes, hash, and size.",
+        "File collection and manifest paths use bytewise sorted order.",
+        "Skip directories, bundle paths, and .tmp names during collection.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Ticket 19: Reject unsafe files and reuse existing bundles",
+      "description":
+        "As a user, I want stable bundles so saved runs remain verifiable.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement bundle reuse checks in src/runbundle/bundle.ts.",
+        "Reject symlinks, non-regular files, and stray manifest files.",
+        "Reject artifacts whose identity changes during reading.",
+        "Reuse an existing valid regular bundle byte for byte.",
+        "Reject invalid existing bundles and symlinked bundle paths.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Ticket 19: Lock, set modes, and finalize bundles",
+      "description":
+        "As a user, I want stable bundles so saved runs remain verifiable.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/19-run-bundles.md.",
+        "Implement bundle locking and writing in src/runbundle/bundle.ts.",
+        "A fresh lock fails; reclaim a lock stale for at least 10 minutes.",
+        "Use mode 0700 for the run dir and 0600 for bundles and locks.",
+        "Compress with zstd level 3 and checksum, rename, verify, and hash.",
+        "Fresh-process build and verification emit no zstd warning.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Ticket 20: Declare review flags and validate raw usage errors",
+      "description":
+        "As a user, I want validated flags so invalid reviews fail early.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement flag declaration in src/cli/review-flags.ts.",
+        "Add review-flags.ts and resolve.ts helpers named in the ticket.",
+        "Declare every review flag from spec/01-cli.md 2.6.",
+        "Implement every raw validation rule in section 2.7.",
+        "Invalid flags exit 2 as usage errors before any network request.",
+        "JSON error format produces category usage and exit_code 2.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Ticket 20: Parse repeated paths, booleans, and bad enum values",
+      "description":
+        "As a user, I want validated flags so invalid reviews fail early.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement flag parsing in src/cli/review-flags.ts.",
+        "Validate raw flags even when config supplies the same setting.",
+        "Reject zero finder output tokens, hexadecimal ints, and bad enums.",
+        "Repeated --paths a,b --paths c yields three pathspecs.",
+        "Read --quick false as false under the accepted yargs semantics.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Ticket 20: Resolve review flags with config and role routes",
+      "description":
+        "As a user, I want validated flags so invalid reviews fail early.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement flag resolution in src/cli/resolve.ts.",
+        "Resolve flags before config before shared runtime defaults.",
+        "Cover configInt, flagOrConfig variants, and resolveLangs.",
+        "Resolve role overrides and author routes per section 2.14.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Ticket 20: Register review and load project config",
+      "description":
+        "As a user, I want trusted preflight so keys reach approved hosts.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Register review and bare invocation in src/cli/run.ts.",
+        "Use loadProjectConfig with withStoredCredentials for review.",
+        "Missing or invalid config exits 2; never read user config here.",
+        "Discover nearest project config; --config overrides discovery.",
+        "Resolve prompt paths relative to the config, including from subdirs.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title":
+        "Ticket 20: Check Git, roles, and removed settings before review",
+      "description":
+        "As a user, I want trusted preflight so keys reach approved hosts.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review preflight in src/cli/review.ts.",
+        "Review outside Git exits 2; bare invocation outside Git shows help.",
+        "Validate finder and applicable verifier roles before requests.",
+        "Ambient removed settings cannot alter budgets, routes, or endpoints.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Ticket 20: Enforce trust approval before review requests",
+      "description":
+        "As a user, I want trusted preflight so keys reach approved hosts.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review trust checks in src/cli/review.ts.",
+        "Untrusted or legacy approval exits 2 without requests or records.",
+        "Malformed trust records exit 4 without provider requests.",
+        "Built-in-only profiles review without writing trust state.",
+        "Inline trust accepts y; declines blank, n, no, and yy.",
+        "Without terminals never read stdin for inline trust.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Ticket 20: Resolve and protect stored keys for review",
+      "description":
+        "As a user, I want trusted preflight so keys reach approved hosts.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review key handling in src/cli/config.ts.",
+        "Credentials resolve env before project before user scope.",
+        "Project stored keys reach built-in OpenAI chat via fake fetch.",
+        "Reject readable-by-others stored keys before any network request.",
+        "Withhold stored keys from custom or overridden endpoints.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Ticket 20: Run the chat finder over scoped input",
+      "description":
+        "As a user, I want a chat review so I can inspect code findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement runReview in src/cli/review.ts.",
+        "Implement runReview over the existing scope, context, and finder.",
+        "Use approved config and fake chat endpoints in CLI tests.",
+        "An empty diff emits NO_DIFF, exits 0, and writes no run directory.",
+        "Empty diffs bypass mode, language, and INFO severity validation.",
+        "Bad mode or language on non-empty input exits 2 without requests.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Ticket 20: Enforce review caps and interactive thresholds",
+      "description":
+        "As a user, I want a chat review so I can inspect code findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review caps in src/cli/review.ts.",
+        "Honor diff caps, prompt caps, interactive thresholds, and overrides.",
+        "A prompt over its cap exits 2 before requests or record creation.",
+        "A small diff downgrades interactive mode to one structured call.",
+        "Zero interactive thresholds retain the exploration tool loop.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Ticket 20: Render review output and severity exits",
+      "description":
+        "As a user, I want a chat review so I can inspect code findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review output in src/cli/review.ts.",
+        "Clean --no-verify JSON review exits 0 with one JSON stdout line.",
+        "A HIGH finding with --max-severity HIGH exits 1.",
+        "Markdown format leaves stdout empty; JSON emits no stderr Markdown.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Ticket 20: Keep review extension seams for later tickets",
+      "description":
+        "As a user, I want a chat review so I can inspect code findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement review extension seams in src/cli/review.ts.",
+        "Keep verifier, snapshot, gate, and survey extension seams explicit.",
+        "Until ticket 21, verifier execution is a pass-through stub.",
+        "Until ticket 22, enabled capture fails open and context reads live.",
+        "Test this stage with --no-verify or --quick and snapshots disabled.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Ticket 20: Initialize and finalize review run records",
+      "description":
+        "As a user, I want saved reviews so I can inspect evidence later.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement record writing in src/cli/review.ts.",
+        "Initialize/finalize records using the record and bundle modules.",
+        "Write beneath the Git toplevel even from nested working directories.",
+        "Store meta, four initial .gz files, responses, and findings JSONL.",
+        "Write result.json.gz, report.md, a verified bundle, and index line.",
+        "Capture one provider-responses.jsonl line per finder model call.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Ticket 20: Record budgets, roles, usage, and overrides",
+      "description":
+        "As a user, I want saved reviews so I can inspect evidence later.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement budget and usage recording in src/cli/review.ts.",
+        "Record resolved budgets, role metadata, usage, and ledger totals.",
+        "Zero budget flags record 0 or 0s; max-attempts=1 remains 1.",
+        "Session headers are sent only by their configured profile.",
+        "Flag overrides affect one invocation and its recorded metadata.",
+        "API keys appear in neither output nor any recorded artifact.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Ticket 20: Record snapshot state and incomplete-run exits",
+      "description":
+        "As a user, I want saved reviews so I can inspect evidence later.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement snapshot recording and exits in src/cli/review.ts.",
+        "A disabled snapshot records its reason and caveat, creating no ref.",
+        "Use injected captureSnapshot and cover its disabled branch.",
+        "An incomplete finder writes the report and records before exit 4.",
+        "A finalize error exits 4 even when severity would otherwise exit 1.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Ticket 20: Map provider failures to review exit codes",
+      "description":
+        "As a CI user, I want stable exit codes so automation can react.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement provider error exits in src/cli/review.ts.",
+        "Exercise the complete chat review via run(argv, io) and fake HTTP.",
+        "Provider 401 exits 3 with category auth.",
+        "Exhausted 500 retries exit 4 with category endpoint.",
+        "Provider failures retain initialized records without result.json.gz.",
+        "Run the full ticket 20 acceptance matrix across prior story seams.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Ticket 20: Handle review cancellation and stdout EPIPE",
+      "description":
+        "As a CI user, I want stable exit codes so automation can react.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/20-review-tracer-bullet-chat.md.",
+        "Implement cancellation exits in src/cli/review.ts.",
+        "Aborting io.signal during the finder exits 5 as cancelled.",
+        "A bundled review exits 5 on one SIGINT and 130 on two.",
+        "No spawned child process remains after cancellation.",
+        "Reuse existing ticket 04 signal coverage when it covers review.",
+        "Flush outputs and preserve computed exit codes on stdout EPIPE.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Ticket 21: Run verifier calls in bounded input order",
+      "description":
+        "As a user, I want checked findings so uncertain claims stay clear.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement verify in src/verify/verify.ts.",
+        "Implement verify, VerifyDeps, and submit_verdict schema constants.",
+        "Use the shared promise pool and preserve input order.",
+        "Bound in-flight calls to concurrency and launch in index order.",
+        "Apply cap and exhausted-ledger verdicts without client calls.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Ticket 21: Apply verifier verdicts to findings",
+      "description":
+        "As a user, I want checked findings so uncertain claims stay clear.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement verdict handling in src/verify/verify.ts.",
+        "Attach confirmed verdicts and the verifier model to kept findings.",
+        "Only grounded recalibration changes effective severity.",
+        "Never alter a finding severity; clear ungrounded recalibration.",
+        "Drop grounded refutations after existing dropped findings.",
+        "Use refuted_by_verifier and update FINDINGS_PRESENT when empty.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title":
+        "Ticket 21: Handle undecided verdicts, logs, and the verdict schema",
+      "description":
+        "As a user, I want checked findings so uncertain claims stay clear.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement undecided handling in src/verify/verify.ts.",
+        "Preserve INCOMPLETE_NO_SUBMISSION and original result state fields.",
+        "Blank grounding and loop errors retain undecided findings.",
+        "Return undecided on abort instead of throwing.",
+        "Emit sanitized refutation logs in input order after completion.",
+        "Keep empty notes null; alphabetize the exact section 2.4 schema.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Ticket 21: Replace the verifier stub with verifier requests",
+      "description":
+        "As a user, I want verified reports so I can act on checked risks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement verifier wiring in src/cli/review.ts.",
+        "Replace the review verifier stub using renderVerifierUser.",
+        "Use numberedSnippet with its 60000-byte limit and reviewed tree.",
+        "Construct the verifier client only when verification has findings.",
+        "Use maxTurns 8, default concurrency 4, and the shared token ledger.",
+        "Append submit_verdict after exploration tools in each request.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Ticket 21: Configure verification and report its results",
+      "description":
+        "As a user, I want verified reports so I can act on checked risks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement verification settings in src/cli/review.ts.",
+        "Resolve maxVerified flag/config/default 25, with 0 meaning no cap.",
+        "Record verifier usage and captures for every verifier model call.",
+        "Zero findings still reports verified true with finder-only usage.",
+        "--quick and --no-verify skip requests and report verified false.",
+        "Validate verifier roles only when verification is enabled.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title":
+        "Ticket 21: Handle undecided verdicts and aborts in review exits",
+      "description":
+        "As a user, I want verified reports so I can act on checked risks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/21-verifier-stage-in-review.md.",
+        "Implement verifier exit handling in src/cli/review.ts.",
+        "Undecided verdicts make the review partial under exit precedence.",
+        "A cap of 1 on two findings yields one undecided and exit 4.",
+        "Abort during verification still saves report/results and exits 4.",
+        "Confirmed HIGH findings can trigger --max-severity exit 1.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Ticket 22: Pin tracked and untracked worktree files",
+      "description":
+        "As a user, I want pinned files so review tools see one tree.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement pinWorktree in src/snapshot/snapshot.ts.",
+        "Implement pinWorktree, Pin, liveIndexPath, and snapshot lookups.",
+        "Use the shared abortable Git runner without an output cap.",
+        "Layer per-call Git settings over inherited settings.",
+        "Resolve relative inherited GIT_INDEX_FILE against the toplevel.",
+        "Never modify source status or bytes of the live index.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title":
+        "Ticket 22: Exclude denylisted files and pin unusual repositories",
+      "description":
+        "As a user, I want pinned files so review tools see one tree.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement pin exclusions in src/snapshot/snapshot.ts.",
+        "Pin tracked and untracked non-ignored, non-denylisted files.",
+        "Exclude deploy.pem and a literal *.key file without deleting them.",
+        "Include ordinary untracked files and report excluded paths.",
+        "A pin works with no HEAD and with an unmerged live index.",
+        "Use existing denylist helpers and goPathMatch.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Ticket 22: Build snapshot trees from index and worktree",
+      "description":
+        "As a user, I want replayable snapshots so review state survives.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement capture trees in src/snapshot/snapshot.ts.",
+        "Implement capture, Snapshot, CaptureOptions, and deleteSnapshot.",
+        "Build index/worktree composite trees with a private index copy.",
+        "Reuse a supplied pin as the captured worktree tree.",
+        "Honor the inherited alternate live index when capturing index state.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Ticket 22: Commit snapshots and create snapshot refs",
+      "description":
+        "As a user, I want replayable snapshots so review state survives.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement snapshot commits in src/snapshot/snapshot.ts.",
+        "Use Roast author and committer identity even without user.email.",
+        "Commit with HEAD first and a differing base second when present.",
+        "Create refs/roast/snapshots/<run-id> pointing at that commit.",
+        "Without HEAD or with an unmerged index, capture fails with no ref.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Ticket 22: Keep snapshots durable and expose metadata",
+      "description":
+        "As a user, I want replayable snapshots so review state survives.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement snapshot metadata in src/snapshot/meta.ts.",
+        "Captured objects survive git gc --prune=now.",
+        "Leave source status and the live index byte-identical.",
+        "Expose metadata fields and excluded paths specified by section 2.13.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Ticket 22: Use the pinned tree for reviews",
+      "description":
+        "As a user, I want consistent context so edits cannot skew a run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Replace placeholder capture and live reads in src/cli/review.ts.",
+        "All non-staged readers, tools, and grounding use the pinned tree.",
+        "Pin even with snapshots disabled or when HEAD does not exist.",
+        "Edits made after pinning never change content served to a model.",
+        "On pin failure, log the specified note and use filtered live reads.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-036",
+      "title": "Ticket 22: Capture snapshots and record their metadata",
+      "description":
+        "As a user, I want consistent context so edits cannot skew a run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement snapshot recording in src/cli/review.ts.",
+        "Capture by default; record capture failure and continue the review.",
+        "Write ref, commit, trees, head, file modes, and scope OID fallbacks.",
+        "Record excluded_paths and its excluded-count caveat.",
+        "Record head..index, head..worktree, or base..worktree diff_pair.",
+        "Ignore ROAST_SNAPSHOT=0 as a capture setting.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-037",
+      "title": "Ticket 22: Manage capture refs across review exits",
+      "description":
+        "As a user, I want consistent context so edits cannot skew a run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/22-review-snapshots.md.",
+        "Implement capture ref cleanup in src/cli/review.ts.",
+        "Delete capture refs on every exit before record initialization.",
+        "Keep capture refs on every exit after record initialization.",
+        "Usage failures after capture leave no snapshot ref.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-038",
+      "title": "Ticket 23: Register runs and read monthly indexes",
+      "description":
+        "As a user, I want past reports so I can inspect review history.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/23-runs-and-runs-show.md.",
+        "Implement runs indexing in src/cli/runs.ts.",
+        "Register runs/show with extension points for snapshot commands.",
+        "Read monthly indexes chronologically with Go Scanner semantics.",
+        "Default limit is 20; limits <=0 include all lines across files.",
+        "CRLF loses one CR; retain final unterminated lines.",
+        "Stop reading a file at a line longer than 16 MiB.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-039",
+      "title": "Ticket 23: List runs as raw and formatted output",
+      "description":
+        "As a user, I want past reports so I can inspect review history.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/23-runs-and-runs-show.md.",
+        "Implement runs listing in src/cli/runs.ts.",
+        "--json emits selected raw lines verbatim, including invalid JSON.",
+        "Formatted output skips invalid JSON and pads by code points.",
+        "No records exits 0 with empty stdout; outside Git exits 2.",
+        "Reject extra positionals and removed sync/status verbs with exit 2.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-040",
+      "title": "Ticket 23: Show stored reports safely",
+      "description":
+        "As a user, I want past reports so I can inspect review history.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/23-runs-and-runs-show.md.",
+        "Implement runs show in src/cli/runs.ts.",
+        "show requires exactly one argument and safely renders report.md.",
+        "Report ESC, BEL, and C1 controls are visibly escaped.",
+        "A missing report or unsafe run ID exits 4.",
+        "IDs .. or a/b never access paths outside .roast/runs/.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-041",
+      "title": "Ticket 24: Load snapshot metadata by run ID",
+      "description":
+        "As a user, I want restored reviews so I can reproduce findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement snapshot load in src/snapshot/snapshot.ts.",
+        "Implement load, restore, removeWorktree, and runs checkout.",
+        "Resolve metadata by exact run ID or unambiguous unique prefix.",
+        "Load head/base from commit parents; excluded is empty on load.",
+        "A missing snapshot ref fails loading.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-042",
+      "title": "Ticket 24: Restore detached worktrees from snapshots",
+      "description":
+        "As a user, I want restored reviews so I can reproduce findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement snapshot restore in src/snapshot/snapshot.ts.",
+        "Restore detached worktrees using read-tree and checkout-index.",
+        "Preserve staged/worktree diffs, untracked content, modes, and links.",
+        "Match source status except intentionally excluded files.",
+        "Clear inherited GIT_INDEX_FILE for every restoration Git call.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-043",
+      "title": "Ticket 24: Choose the checkout destination and print output",
+      "description":
+        "As a user, I want restored reviews so I can reproduce findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement runs checkout output in src/cli/runs.ts.",
+        "Resolve a relative destination once against cwd, even in subdirs.",
+        "Default destination uses a temp checkout directory and run ID.",
+        "Print only the absolute path plus newline to stdout.",
+        "Write the worktree removal hint to stderr.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-044",
+      "title": "Ticket 24: Clean up and exit correctly on checkout failures",
+      "description":
+        "As a user, I want restored reviews so I can reproduce findings.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement runs checkout errors in src/cli/runs.ts.",
+        "Clean up any worktree created before a restore failure.",
+        "Unknown/ambiguous IDs, uncaptured runs, and bad arity exit 2.",
+        "Outside Git exits 2; restore failures exit 4.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "Ticket 24: Select snapshot refs for pruning",
+      "description":
+        "As a user, I want snapshot pruning so old refs do not accumulate.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement prune in src/snapshot/snapshot.ts.",
+        "Implement prune, Pruned, and runs prune duration/dry-run options.",
+        "Default retention is 720h; non-positive values fall back to 30 days.",
+        "Prune refs whose committer age is at least the threshold.",
+        "Skip refs of unknown age and refs pointing at non-commits.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Ticket 24: Apply dry-run and real snapshot pruning",
+      "description":
+        "As a user, I want snapshot pruning so old refs do not accumulate.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement runs prune in src/cli/runs.ts.",
+        "Dry-run reports old refs as deleted false and leaves refs intact.",
+        "Real pruning deletes old refs while fresh snapshots still load.",
+        "Empty repositories with no snapshot refs produce empty stdout.",
+        "Format delete/would-delete ages as Go durations rounded to hours.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-047",
+      "title": "Ticket 24: Format prune output and validate prune usage",
+      "description":
+        "As a user, I want snapshot pruning so old refs do not accumulate.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/24-runs-checkout-and-prune.md.",
+        "Implement prune output in src/cli/runs.ts.",
+        "Never delete .roast/runs/ contents or invoke git gc.",
+        "A post-review 1ns threshold selects its snapshot ref.",
+        "Bad duration, positionals, and running outside Git exit 2.",
+        "Prune operation failures exit 4.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-048",
+      "title": "Ticket 25: Build the committed-tree manifest with filters",
+      "description":
+        "As a user, I want a repo manifest so surveys cover committed code.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/25-repo-survey-review.md.",
+        "Implement buildSurveyRepo in src/scope/survey.ts.",
+        "Dispatch scope repo through src/scope/build.ts.",
+        "List sorted HEAD files, HEAD identity, and top-directory counts.",
+        "Apply path filters, subtree pathspecs, and configured exclusions.",
+        "Honor linguist exclusions only when the working tree is clean.",
+        "A dirty tree adds both specified notes and drops linguist excludes.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-049",
+      "title":
+        "Ticket 25: Handle empty and staged repos and quote hostile names",
+      "description":
+        "As a user, I want a repo manifest so surveys cover committed code.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/25-repo-survey-review.md.",
+        "Ignore staged additions and include files deleted only in the index.",
+        "No tracked files means empty scope, including repos without HEAD.",
+        "Go-quote hostile names with lowercase hex and explain quoting.",
+        "Newline, <, and > names use the required escapes.",
+        "Test manifestQuote for controls, quotes, slashes, and nonprintables.",
+        "Implement manifestQuote in src/scope/survey.ts.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-050",
+      "title": "Ticket 25: Wire survey scope into review input",
+      "description":
+        "As a user, I want repo surveys so I can triage beyond a diff.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/25-repo-survey-review.md.",
+        "Implement survey wiring in src/cli/review.ts.",
+        "Wire the survey branches into review using the committed manifest.",
+        "Use survey prompts and submit_findings descriptions already present.",
+        "Send manifest as input.gz and record input_kind manifest.",
+        "Always use exploration tools; never apply small-diff downgrade.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-051",
+      "title": "Ticket 25: Record survey metadata and completion states",
+      "description":
+        "As a user, I want repo surveys so I can triage beyond a diff.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/25-repo-survey-review.md.",
+        "Implement survey records in src/cli/review.ts.",
+        "Default max turns is 40 and deadline is 25m; honor overrides.",
+        "Record scope.survey, manifest count, and survey_triage review_kind.",
+        "Converged clean runs become NO_FINDINGS_IN_SAMPLED_AREAS.",
+        "Completed runs record complete/converged completion state.",
+        "Cut-off/incomplete runs record partial, stop reason, and exit 4.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-052",
+      "title": "Ticket 25: Limit survey output and reject conflicting options",
+      "description":
+        "As a user, I want repo surveys so I can triage beyond a diff.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/25-repo-survey-review.md.",
+        "Implement survey checks in src/cli/review.ts.",
+        "Only survey JSON includes survey-specific fields.",
+        "Empty committed trees return NO_DIFF without any run directory.",
+        "Keep repo/quick, staged, base, and uncommitted-only conflicts.",
+        "Captured survey metadata uses diff_pair head.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-053",
+      "title": "Ticket 26: Select fake responses and build fixed repositories",
+      "description":
+        "As a maintainer, I want precise comparisons so parity is measured.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Extend existing test/diff comparators; reuse the shared HTTP fake.",
+        "Select responses by model and turn count, never arrival order.",
+        "Build identical fixed-identity repositories with matching Git OIDs.",
+        "Group requests by model/turn and compare method, path, and body.",
+        "Compare header names, Content-Type, and auth scheme only.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-054",
+      "title":
+        "Ticket 26: Compare run records and captures with failure details",
+      "description":
+        "As a maintainer, I want precise comparisons so parity is measured.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Extend record comparison in test/diff/.",
+        "Compare run path sets, parsed JSON/JSONL, and decompressed .gz.",
+        "Compare raw response captures byte for byte.",
+        "Compare decompressed tar entries and manifests, not zstd bytes.",
+        "Injected record/body changes fail with file/path or request group.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-055",
+      "title":
+        "Ticket 26: Normalize unstable values and cite allowlisted differences",
+      "description":
+        "As a maintainer, I want precise comparisons so parity is measured.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Extend normalization in test/diff/.",
+        "Normalize run IDs, times, durations, paths, and build identity.",
+        "Normalize session values and digests containing run IDs.",
+        "Normalize snapshot commit/ref OIDs; compare tree OIDs exactly.",
+        "Exclude stderr, Markdown, help, trust records, and debug output.",
+        "Each allowlist entry cites a deliberate change; no broad ignores.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-056",
+      "title": "Ticket 26: Add chat review scenarios to the harness",
+      "description":
+        "As a maintainer, I want chat parity so cutover has evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Add review scenarios in test/diff/.",
+        "Add clean, confirmed-findings, JSON, and staged review scenarios.",
+        "Add severity-triggered and non-triggered exit scenarios.",
+        "Add exhausted HTTP 500 and HTTP 401 provider scenarios.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-057",
+      "title": "Ticket 26: Run Go and TS scenarios and compare results",
+      "description":
+        "As a maintainer, I want chat parity so cutover has evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Extend scenario comparison in test/diff/.",
+        "Run Go cd08f10 and the TS bundle with scrubbed environments.",
+        "Approve custom fixture endpoints independently with trust --yes.",
+        "Compare exact exit codes, JSON, requests, and run artifacts.",
+        "Reordering verifier completions cannot change scenario outcomes.",
+        "Different zstd bytes with identical tar entries compare equal.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-058",
+      "title": "Ticket 26: Skip without Go, run on CI, and record divergences",
+      "description":
+        "As a maintainer, I want chat parity so cutover has evidence.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/26-harness-m3-review-scenarios.md.",
+        "Extend CI scenario handling in test/diff/.",
+        "Without Go, every scenario TAP-skips and exits 0.",
+        "Ubuntu CI runs these scenarios after the build.",
+        "Record unexplained Go divergences in owning spec Open questions.",
+        "Do not hide unaccepted differences in the harness.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-059",
+      "title": "Ticket 27: Encode Responses request bodies",
+      "description":
+        "As a user, I want Responses requests so my profile is supported.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Implement the pure encoder in src/llm/responses.ts.",
+        "Use ModelClient.send/requestBytes without changing the agent loop.",
+        "POST to <base>/v1/responses with store false and stream true.",
+        "Replay the full conversation without reasoning or response IDs.",
+        "Omit previous_response_id, include, and reasoning entirely.",
+        "Use auto tool_choice and the same tools during wrap-up.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-060",
+      "title": "Ticket 27: Encode tool results, schemas, and the system role",
+      "description":
+        "As a user, I want Responses requests so my profile is supported.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Implement tool and system encoding in src/llm/responses.ts.",
+        "Encode tool results as function_call_output with matching call_id.",
+        "Preserve full JSON schemas, nested required, and strict false.",
+        "Implement responsesSystemMode using the exact model-ID rules.",
+        "Use system for gpt-3/gpt-4/chatgpt-/-chat IDs as specified.",
+        "Remove system for o1-mini/o1-preview; otherwise use developer.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-061",
+      "title": "Ticket 27: Decode Responses SSE events and failures",
+      "description":
+        "As a user, I want complete streams so partial tools never run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Implement the Responses decoder in src/llm/responses.ts.",
+        "Implement the Responses SSE decoder, usage, and protocol dispatch.",
+        "Extend writeInferenceStream with ordered Responses sequence numbers.",
+        "Decode tool calls and outputs through the shared result encoder.",
+        "response.failed and error fail without retrying.",
+        "Missing completed/incomplete terminal events are retryable errors.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-062",
+      "title": "Ticket 27: Map Responses finish reasons",
+      "description":
+        "As a user, I want complete streams so partial tools never run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Implement finish mapping in src/llm/responses.ts.",
+        "Map missing/empty finish to tool-calls or stop.",
+        "Map max_output_tokens to length and content_filter accordingly.",
+        "Never dispatch tool calls from a length finish.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-063",
+      "title": "Ticket 27: Count Responses usage and keep raw captures",
+      "description":
+        "As a user, I want complete streams so partial tools never run.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Implement usage counting in src/llm/usage.ts.",
+        "Subtract cached tokens once: 100/30 yields 70 uncached, 30 cached.",
+        "100 input tokens with 80 cached yields 20 uncached, 80 cached.",
+        "Preserve raw SSE capture bytes and tag protocol responses.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-064",
+      "title": "Ticket 27: Run Responses reviews against the fake",
+      "description":
+        "As a user, I want Responses reviews so reports match chat behavior.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Add Responses review tests in test/cli/.",
+        "Run full finder/verifier reviews against the Responses fake.",
+        "Clean/finding runs exit 0/1 with the same JSON shape as chat.",
+        "A 500 with maxAttempts 1 sends exactly one request.",
+        "Ambient provider/header variables add no headers or credentials.",
+        "Refuse redirects as endpoint errors and never send keys to targets.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-065",
+      "title": "Ticket 27: Prove Responses parity in the diff harness",
+      "description":
+        "As a user, I want Responses reviews so reports match chat behavior.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/27-responses-adapter.md.",
+        "Extend the test:diff harness in test/diff/.",
+        "Raw stream bodies appear byte-identically in response records.",
+        "Run all M3 review scenarios on a Responses profile in test:diff.",
+        "Compare exits, parsed JSON, grouped requests, and run records.",
+        "Only deliberate, cited differences may be allowlisted.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-066",
+      "title": "Ticket 28: Encode core Anthropic request fields",
+      "description":
+        "As a user, I want Anthropic requests so native profiles work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement the Anthropic encoder in src/llm/anthropic.ts.",
+        "Implement the pure Anthropic encoder behind the common client seam.",
+        "Trim trailing /v1 before appending /v1/messages.",
+        "Use X-Api-Key and Anthropic-Version without Authorization.",
+        "Use text-block system prompts and stream true.",
+        "max_tokens equals the profile budget, including 1024 and 32768.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-067",
+      "title":
+        "Ticket 28: Encode Anthropic tools, schemas, and thinking settings",
+      "description":
+        "As a user, I want Anthropic requests so native profiles work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement tool encoding in src/llm/anthropic.ts.",
+        "tool_choice is auto in every phase, including structured wrap-up.",
+        "Preserve full deep-copied input_schema and nested required arrays.",
+        "When required is absent, encode it as an empty array.",
+        "Omit cache_control and anthropic-beta.",
+        "Only claude-mythos-preview IDs receive adaptive thinking settings.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-068",
+      "title": "Ticket 28: Replay Anthropic messages and thinking blocks",
+      "description":
+        "As a user, I want Anthropic requests so native profiles work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement message replay in src/llm/anthropic.ts.",
+        "Alternate user/assistant groups; replay blocks in arrival order.",
+        "Keep signed thinking unchanged, including blocks after tool calls.",
+        "Replay redacted thinking; drop unsigned thinking blocks.",
+        "Blank or non-object tool_use input becomes an empty object.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-069",
+      "title":
+        "Ticket 28: Decode Anthropic stream events and incomplete streams",
+      "description":
+        "As a user, I want sound stream decoding so retries stay safe.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement the Anthropic decoder in src/llm/anthropic.ts.",
+        "Implement Anthropic SSE decoding, usage, and protocol dispatch.",
+        "Extend writeInferenceStream with message_start through message_stop.",
+        "Track content blocks by index and update usage field by field.",
+        "Missing message_stop or empty stop reason is retryable incomplete.",
+        "Never dispatch partial tool calls from incomplete streams.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-070",
+      "title": "Ticket 28: Map Anthropic stop reasons",
+      "description":
+        "As a user, I want sound stream decoding so retries stay safe.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement stop reason mapping in src/llm/anthropic.ts.",
+        "Map end_turn, pause_turn, and stop_sequence to stop.",
+        "Map max_tokens/model_context_window_exceeded to length.",
+        "Map refusal/content_filtered/guardrail_intervened to content-filter.",
+        "Expose unknown stop reasons with unknown finish status.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-071",
+      "title": "Ticket 28: Count Anthropic usage and keep raw captures",
+      "description":
+        "As a user, I want sound stream decoding so retries stay safe.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Implement usage counting in src/llm/anthropic.ts.",
+        "The fixture yields usage 20/6/4/8/2 in the specified field order.",
+        "Capture all attempts but count only completed calls in usage.",
+        "Keep raw SSE bytes in provider-responses.jsonl.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-072",
+      "title": "Ticket 28: Exercise Anthropic reviews and port the Go fakes",
+      "description":
+        "As a user, I want Anthropic parity so the same reviews work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Add Anthropic review tests in test/cli/.",
+        "Exercise finder/verifier and wrap-up through the Anthropic fake.",
+        "A review exits 0/1 as on chat and replays the injected notice.",
+        "Port bindingServer and DeepSeek thinking fakes from Go.",
+        "Both fakes accept unchanged signed prefixes and auto tool choice.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-073",
+      "title":
+        "Ticket 28: Handle Anthropic auth, redirects, and ambient variables",
+      "description":
+        "As a user, I want Anthropic parity so the same reviews work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Add Anthropic error tests in test/cli/.",
+        "401 exits 3 with auth JSON diagnostics.",
+        "Refuse 3xx without retry or leaking X-Api-Key to the target.",
+        "Ambient ANTHROPIC variables never alter requests or credentials.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-074",
+      "title": "Ticket 28: Prove Anthropic parity in the diff harness",
+      "description":
+        "As a user, I want Anthropic parity so the same reviews work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Extend the test:diff harness in test/diff/.",
+        "Run all M3 review scenarios on Anthropic in test:diff.",
+        "Allowlist schema changes only under deliberate change 21.",
+        "Compare exits, JSON reports, grouped requests, and run records.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-075",
+      "title": "Ticket 28: Add the opt-in Anthropic live test",
+      "description":
+        "As a user, I want Anthropic parity so the same reviews work.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/28-anthropic-adapter.md.",
+        "Add the live test in test/live/.",
+        "Add the opt-in two-turn Anthropic live test; never run it in CI.",
+        "Use ROAST_LIVE_ANTHROPIC_API_KEY and optional base/model settings.",
+        "Without live settings, the live test skips.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-076",
+      "title": "Ticket 30: Offer the gate and record decisions",
+      "description":
+        "As a user, I want a gate offer so I can opt into commit checks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/30-gate-offer-during-review.md.",
+        "Implement bootstrap in src/gate/bootstrap.ts.",
+        "Implement bootstrap and maybeBootstrapGate with shared stdin lines.",
+        "Offer before trust/scope/network, after error-format validation.",
+        "Terminal yes installs and records enabled; no records declined.",
+        "Recorded decisions prevent later offer stdin consumption.",
+        "Without terminals record notice sent once and install no hook.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-077",
+      "title": "Ticket 30: Skip the gate offer in unsupported contexts",
+      "description":
+        "As a user, I want a gate offer so I can opt into commit checks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/30-gate-offer-during-review.md.",
+        "Implement offer skipping in src/cli/gate-offer.ts.",
+        "Skip on GIT_INDEX_FILE, gate.offer false, or error-format json.",
+        "Skip outside Git, subdir-only config, or bad toplevel config.",
+        "--format json permits the offer; ROAST_NO_HOOK has no effect.",
+        "A suppressed offer never consumes the repository notice.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-078",
+      "title": "Ticket 30: Refresh gate files and keep review exit codes",
+      "description":
+        "As a user, I want a gate offer so I can opt into commit checks.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/30-gate-offer-during-review.md.",
+        "Implement gate refresh in src/gate/bootstrap.ts.",
+        "Refresh stale Roast-owned dispatcher/sidecar even when declined.",
+        "Never adopt an inherited shared gate without a local decision.",
+        "Bootstrap errors warn and never change the review exit code.",
+        "Assert on Git config, hook files, and stdin consumption.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-079",
+      "title": "Ticket 36: Compare run listing and show commands",
+      "description":
+        "As a maintainer, I want command parity so saved runs survive.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/36-harness-m5-scenarios.md.",
+        "Add M5 run scenarios in test/diff/.",
+        "Extend the existing differential harness with M5 run scenarios.",
+        "Create two reviews per fixture through the shared inference fake.",
+        "Compare runs, --json, --limit 1 --json, and runs show exits.",
+        "Compare parsed JSON listing output using existing normalization.",
+        "Do not compare rendered Markdown or human report wording.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-080",
+      "title": "Ticket 36: Compare checkout and prune commands",
+      "description":
+        "As a maintainer, I want command parity so saved runs survive.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/36-harness-m5-scenarios.md.",
+        "Extend M5 run scenarios in test/diff/.",
+        "Compare checkout file sets and content, omitting denylisted files.",
+        "Compare prune dry-run and real-run exits and remaining refs.",
+        "Allowlist run-ID/checkout changes only by cited change numbers.",
+        "No broad ignore rules; record other divergences in owning specs.",
+        "The Ubuntu differential CI job passes with these scenarios.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-081",
+      "title": "Ticket 36: Run the init scenario against the Go baseline",
+      "description":
+        "As a maintainer, I want init parity so project setup stays stable.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/36-harness-m5-scenarios.md.",
+        "Add the init scenario in test/diff/.",
+        "Add the M5 init scenario to the existing differential harness.",
+        "Run init with finder/verifier models and --no-login on the fake.",
+        "Use identical fixture repositories and scrubbed environments.",
+        "Compare exits, parsed JSONC config, and written .gitignore.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-082",
+      "title": "Ticket 36: Allowlist init differences and run M5 on CI",
+      "description":
+        "As a maintainer, I want init parity so project setup stays stable.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/36-harness-m5-scenarios.md.",
+        "Extend the init comparison in test/diff/.",
+        "Formatting differences require a specific cited allowlist entry.",
+        "Keep unaccepted behavior differences visible as harness failures.",
+        "Run the complete M5 harness successfully on Ubuntu CI.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-083",
+      "title": "Ticket 45: Test doctor probes on both remaining protocols",
+      "description":
+        "As a user, I want doctor probes so protocol failures are clear.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/45-doctor-roundtrip-adapters.md.",
+        "Extend doctorRoundtripCheck coverage for responses and anthropic.",
+        "Reuse the chat two-turn tool probe and fake-server infrastructure.",
+        "Responses profiles make exactly two requests to /v1/responses.",
+        "Both protocols pass a lookup followed by a final token echo.",
+        "Fakes reject forced tool choice and changed replay prefixes.",
+        "Keep protocol-specific behavior inside the adapters.",
+        "Lint, Go build, and Go tests still pass.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-084",
+      "title": "Ticket 37: Confirm cutover preconditions",
+      "description":
+        "As a maintainer, I want one JS package so Go packaging can retire.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Implement the precondition checks in scripts/check-pack.ts.",
+        "Confirm all area test plans and differential scenarios pass first.",
+        "Resolve or accept every remaining parity difference before deletion.",
+        "Check build/check:pack against the final manifest before deletion.",
+        "Record each precondition in the eventual pull request description.",
+        "Follow spec/15-packaging.md 2.15 items 1 through 7 in order.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-085",
+      "title": "Ticket 37: Move assets and remove Go tooling",
+      "description":
+        "As a maintainer, I want one JS package so Go packaging can retire.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Move 12 templates, skill assets, and hook into src with git mv.",
+        "Update imports; asset loader output still matches files on disk.",
+        "Remove Go, platform workspaces, launcher, and legacy tooling/tests.",
+        "Rename check-package.ts to check-pack.ts after deleting its legacy.",
+        "Remove test/diff, --diff bundling, and the test:diff npm script.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-086",
+      "title": "Ticket 37: Write the pure JavaScript package manifest",
+      "description":
+        "As a maintainer, I want one JS package so Go packaging can retire.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Implement the manifest in package.json.",
+        "Use the section 2.1 manifest and keep version 0.0.0.",
+        "No dependencies, optionalDependencies, workspaces, main, or exports.",
+        "Point bin.roast to dist/cli.js; require Node 22.18, darwin/linux.",
+        "Apply final build, test, version, and release lifecycle scripts.",
+        "Remove obsolete tsconfig excludes and lint ignore flags.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-087",
+      "title": "Ticket 37: Finalize npmrc and verify the packed package",
+      "description":
+        "As a maintainer, I want one JS package so Go packaging can retire.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        ".npmrc is exactly package-lock=false; remove Go-era ignores.",
+        "Delete generated root THIRD_PARTY_LICENSES when present.",
+        "npm run build and npm run check:pack pass with the pure-JS package.",
+        "The packed package installs no transitive packages and starts.",
+        "A clean installation emits no npm force warning.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-088",
+      "title": "Ticket 37: Update ci.yml and remove Go jobs",
+      "description":
+        "As a maintainer, I want JS CI so releases use one toolchain.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Apply spec/15-packaging.md 2.12 and 2.15 item 8 to ci.yml.",
+        "Delete the differential CI job now that cutover parity is recorded.",
+        "Delete staticcheck, govulncheck, and licenses tool modules.",
+        "Remove Go setup, gofmt, vet, and Go license/vulnerability steps.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-089",
+      "title": "Ticket 37: Run final JavaScript and security CI checks",
+      "description":
+        "As a maintainer, I want JS CI so releases use one toolchain.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Run JS checks on Ubuntu/macOS with Node 22/24 as specified.",
+        "Keep gitleaks and actionlint in the security job.",
+        "Add npm audit --audit-level=high and shellcheck on the moved hook.",
+        "Run shellcheck src/gate/pre-commit.sh and actionlint successfully.",
+        "The final-state CI commands run successfully with npm scripts.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-090",
+      "title": "Ticket 37: Rewrite agent notes for TypeScript",
+      "description":
+        "As a user, I want current docs so I can install the JS release.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Follow spec/15-packaging.md 2.15 items 9 through 12.",
+        "Rewrite AGENTS.md and area notes around the TS implementation.",
+        "Move test-env clearing guidance to docs/agents/typescript.md.",
+        "Delete go.md and remove Go halves and harness notes elsewhere.",
+        "Rewrite packaging notes for bundle, notices, tests, and release.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-091",
+      "title": "Ticket 37: Update README, contributing, and review prompt docs",
+      "description":
+        "As a user, I want current docs so I can install the JS release.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Implement the doc updates in README.md.",
+        "README documents Node 22.18+, macOS/Linux, and pure JavaScript.",
+        "Document NODE_USE_ENV_PROXY=1 and NODE_EXTRA_CA_CERTS network setup.",
+        "Update CONTRIBUTING setup, commands, live tests, and release.",
+        "Reword the review prompt for a TypeScript reviewer.",
+        "Use npx roast invocations, no em dashes, and no arrow characters.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-092",
+      "title": "Ticket 37: Verify docs and the final package",
+      "description":
+        "As a user, I want current docs so I can install the JS release.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/37-m6-cutover.md.",
+        "Implement the final checks in scripts/check-pack.ts.",
+        "Updated docs contain none of the obsolete references in ticket 37.",
+        "The 2.1 pack file list and slim renamed package check pass.",
+        "A packed temp install has no transitive packages and starts.",
+        "Lint, npm test, schema diff check, and check:pack all pass locally.",
+        "Keep version 0.0.0; publication belongs to human-only ticket 38.",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-093",
+      "title": "Ticket 38: Human-only live headless OpenRouter check",
+      "description":
+        "As a maintainer, I want a live check so login is proven pre-release.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/38-release-2-0-0.md.",
+        "This ready-for-human story must be performed by the maintainer.",
+        "Ralph must hand off here; it must not use live accounts on its own.",
+        "From a main build, use a scratch Git repo and OpenRouter config.",
+        "Run npx roast login openrouter --no-browser on the live service.",
+        "Open its URL without callback_url, approve, and paste the code.",
+        "Verify the minted key is stored in project credentials.json.",
+        "A small OpenRouter review succeeds using that stored key.",
+        "Record the result in source ticket 38 Comments without any secrets.",
+        "If login fails, file a bug and stop before any release operation.",
+        "Typecheck passes"
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-094",
+      "title": "Ticket 38: Human-only publish and verify version 2.0.0",
+      "description":
+        "As a maintainer, I want a release so users can install the rewrite.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/38-release-2-0-0.md.",
+        "This ready-for-human story must be performed by the maintainer.",
+        "Require the recorded successful live headless check before release.",
+        "Use an up-to-date main branch with a clean working tree.",
+        "Run npm version 2.0.0 through the documented lifecycle.",
+        "Lifecycle updates TOC/changelog and commits/tags/pushes/publishes.",
+        "prepublishOnly builds and checks the packed release.",
+        "After a pushed tag failure, fix via patch release; never re-tag.",
+        "npm view @substrate-system/roast version returns 2.0.0.",
+        "The published package dependencies listing is empty.",
+        "origin has v2.0.0; changelog keeps 1.4.x history below 2.0.0.",
+        "Fresh macOS/Linux temp projects install the published 2.0.0.",
+        "Installs add no platform packages and no transitive dependencies.",
+        "npx roast --version reports 2.0.0 with commit and build date.",
+        "Typecheck passes"
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-095",
+      "title": "Ticket 38: Human-only deprecate Go-era platform packages",
+      "description":
+        "As a maintainer, I want deprecations so old users find version 2.",
+      "acceptanceCriteria": [
+        "Read .scratch/ts-rewrite/issues/38-release-2-0-0.md.",
+        "This ready-for-human story must be performed by the maintainer.",
+        "Confirm 2.0.0 is visible on npm before deprecating packages.",
+        "Deprecate version 0.0.0 of all six Roast platform packages.",
+        "Cover darwin, linux, and win32 with both arm64 and x64.",
+        "Each message points to @substrate-system/roast version 2.0.0.",
+        "npm view reports a non-empty deprecation for each platform package.",
+        "Typecheck passes"
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

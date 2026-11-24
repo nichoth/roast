@@ -6,125 +6,142 @@ it is not a promise that a model or provider will handle untrusted input safely.
 
 ## Trusted configuration
 
-Inference profiles, credentials, upload destinations, and prompt overrides come
-from the user's Roast configuration, environment, or command-line flags. Roast
-does not load repository-local configuration. A checked-out repository therefore
-cannot select a network destination or credential merely by adding a config
-file.
+Every non-secret setting comes from the project config, `.roast.json`, which
+is committed with the code; credentials come from environment variables or
+from stored credentials outside the repository, and the project config may
+name a credential variable but never hold a credential. Roast is installed as a project dependency, so the repository's
+lockfile already decides which Roast binary runs and its npm scripts can
+already run code with the user's environment. Refusing a repository-local
+config file would therefore protect nothing. What still needs protecting is
+the developer's credentials and code: a cloned repository must not be able to
+silently send a provider key, or the code under review, somewhere the
+developer has not agreed to.
+
+Roast therefore trusts a project config per clone (ADR-0001). The
+security-relevant projection of a config is, for every profile selected by a
+role or an author route, its resolved endpoint, protocol, and credential
+variable name, plus every prompt-override path. Prompt overrides are included
+because they name local files whose contents are sent to the configured
+endpoints. A config whose selected profiles all use a built-in provider's
+endpoint (OpenAI, Anthropic, or OpenRouter) with a protocol that provider
+accepts and either no credential variable or that provider's standard key
+variable, and which sets no prompt overrides, needs no approval. OpenRouter
+with any other credential variable still needs approval. Any other config must be
+approved before Roast sends code or credentials anywhere it names.
+
+An approval is a hash of the projection only. Editing a model, a threshold, a
+limit, or a gate setting keeps the approval; changing an endpoint, protocol,
+credential variable, or prompt-override path requires approval again.
+Approvals are stored in `roast/trust.json` inside the Git common directory,
+so linked worktrees share them and `git clone` never copies them: a
+repository cannot ship its own approval. There is no `untrust` command;
+deleting the trust record withdraws every approval for the clone.
+
+`npx roast trust` prints, for each role and author route, the profile,
+endpoint, protocol, and credential variable name, plus any prompt-override
+paths, then asks a `[y/N]` question and records the approval only on `y`.
+`--yes` records without asking, which is how CI approves explicitly. Control
+characters in every printed value are escaped, so configuration text cannot
+rewrite what the user is asked to approve.
+
+When `npx roast review` finds an unapproved config and both stdin and stderr
+are terminals, it shows the same summary on stderr and asks inline; only `y`
+records the approval and lets the review continue. Otherwise it exits with a
+usage error naming `npx roast trust`. In both cases no network request is made
+before approval. The pre-commit gate treats an unapproved config like any
+other operational failure: it warns and allows the commit. `npx roast doctor`
+reports the project config path, whether approval is required, and whether it
+is granted, and does not probe an endpoint this clone has not approved. There
+is no environment-variable bypass for trust.
 
 ## Configuration templates
 
-An organization can publish a configuration template at a URL. A template is
-installed by `roast config init --from <url>`, by `roast config init` with the
-URL typed at its prompt, or by entering the URL at the interactive
-configuration-URL prompt that `roast review` and `roast runs sync` can show
-(described below). Templates are trusted input: review and host them with the
-same care as other organization configuration.
-
-The configuration URL must use HTTPS, or plain HTTP to a loopback address, and
-must not embed credentials or a fragment. Redirects must stay on the same
-origin, and the document is limited to 1 MiB. Roast validates the complete
-template before writing anything, installs it atomically with owner-only
-(`0600`) permissions, and never sends a local credential to the configuration
-URL. A template that only switches existing Claude profiles to the native
-`anthropic` protocol changes nothing else in an existing configuration, and the
-previous file is kept as a backup.
-
-A template may set:
-
-- inference profiles: model, endpoint, protocol, output-token limit, and the
-  name of the environment variable that holds each profile's credential
-  (`api_key_env`);
-- role selection and author routes;
-- review defaults;
-- upload settings, including enabling automatic uploads, the destination, and
-  the names of the environment variables that hold upload credentials
-  (`access_key_env`, `secret_key_env`, `session_token_env`, `token_env`).
-
-A template may not contain a literal `api_key` or upload `token`, and may not
-set `prompts.*`: prompt overrides name local files whose contents would be sent
-to the template's endpoints, so they belong only in the user's own config.
-
-Because a template can name any environment variable as a credential source and
-can direct reviewed code and uploads to any endpoint, Roast prints a summary to
-stderr whenever it installs one: for each role (and author route), the profile,
-endpoint, protocol, and credential variable, plus whether uploads are on and
-where they go. When a template enables uploads during an interactive install,
-Roast installs it only after an explicit `y` answer to a `[y/N]` question.
-Non-interactive installs print the summary and proceed, since the command
-itself names the URL.
-
-A template's text fields, such as profile names, author-route keys, endpoints,
-and the upload bucket and prefix, must not contain control characters; Roast
-rejects such a template before writing anything. The summary and the upload
-question also escape control characters in every configuration value they
-print, so configuration text cannot rewrite what the user is asked to approve.
-
-The configuration-URL prompt appears only when both stdin and stderr are
-terminals and no `--config` path is given. It then appears in three cases: the
-default config file is missing and the finder and verifier cannot be resolved
-from the environment and command-line flags; the file is unversioned; or the
-file has Claude profiles using Chat Completions or Responses. The last two cases
-prompt even when the roles already resolve. Leaving the URL blank leaves the
-configuration as it is; for a versioned file, that choice is recorded in a
-private sibling `.protocol-update-ack` file containing only the config's hash,
-so the prompt does not repeat until the config changes. Its prompts go to
-stderr, so redirected review output is never mixed with them.
+Roast no longer installs configuration templates from a URL. A team shares its
+configuration by committing `.roast.json`, which every clone then approves
+under the per-clone trust described above. An organization that wants a
+common configuration can publish a starter file for teams to copy into their
+repositories; once copied, it is an ordinary project config and is approved,
+reviewed, and changed like any other committed file. `npx roast init` writes a
+starter that uses only the built-in provider endpoints and key variables, so
+it needs no approval until someone points a profile elsewhere.
 
 ## Credentials and endpoints
 
 Each inference profile binds a model, endpoint, protocol, and credential
-source as one unit. Provider environment variables are a fallback, never an
-override:
+source as one unit. Credentials are the only settings that come from outside
+the project config: from the environment, or from a stored credential
+(ADR-0002).
 
-- `ROAST_FINDER_*` and `ROAST_VERIFIER_*` variables override the selected
-  profile's fields, and command-line role flags override both.
-- `OPENAI_BASE_URL` (for `chat` and `responses`) or `ANTHROPIC_BASE_URL` (for
-  `anthropic`) applies only to a profile that sets no `endpoint`, including
-  after a protocol override moves that profile to another provider.
-- A role's credential is the first of: `ROAST_FINDER_API_KEY` or
-  `ROAST_VERIFIER_API_KEY`; the profile's `api_key_env` or `api_key`; or the
-  provider's `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, but only when the role's
-  endpoint is that provider's default endpoint or the same provider's
-  `*_BASE_URL`.
-- When a protocol override moves a role from one provider's endpoint to
-  another's, the profile's credential does not follow it.
-- An endpoint override (`ROAST_<ROLE>_BASE_URL` or `--<role>-base-url`)
-  carries the role key or the profile's own credential to the endpoint it
-  names. It carries a provider key from the shell only under the rule above:
-  when the endpoint it names is that provider's default endpoint or the same
-  provider's `*_BASE_URL`.
-- `ROAST_<ROLE>_*` variables and the matching command-line flags apply these
-  rules identically.
+- A role's credential is the first of:
+  1. `ROAST_FINDER_API_KEY` or `ROAST_VERIFIER_API_KEY`;
+  2. the variable named by the profile's `api_key_env`;
+  3. the provider's standard variable: `OPENAI_API_KEY`,
+     `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`;
+  4. the provider's project-scope stored credential;
+  5. the provider's user-scope stored credential.
+
+  The last three apply only when the role's endpoint is that built-in
+  provider's endpoint and it accepts the role's protocol there.
+- A stored credential is matched to a role only by that endpoint and
+  protocol, never by anything the project config names, so a profile on a
+  custom endpoint never receives one, and neither does a role an override
+  moved off its provider's endpoint.
+- The project-scope credentials file is
+  `<git-common-dir>/roast/credentials.json`, inside `.git`, so it is never
+  committed or cloned. The user-scope file is
+  `$XDG_CONFIG_HOME/roast/credentials.json` (or
+  `~/.config/roast/credentials.json`). Both are written with mode 0600 in a
+  0700 directory. On Unix, a credentials file that group or others can read
+  stops resolution with an error instead of being skipped.
+- `npx roast login <provider>` stores a credential in the project scope, or
+  the user scope with `--global`. For Anthropic and OpenAI the user pastes a
+  key, which Roast checks with one authenticated request to the provider's
+  built-in endpoint before storing it. For OpenRouter, Roast runs
+  OpenRouter's PKCE browser exchange on a loopback callback and receives a
+  newly minted key labeled `roast`; the label carries no project or
+  directory name. Login never prints the key. `npx roast logout` deletes a
+  stored credential but does not revoke it at the provider.
+- Roast does not honor `OPENAI_BASE_URL` or `ANTHROPIC_BASE_URL`; endpoints
+  come only from the project config or command-line flags.
+- When a protocol override (`--<role>-protocol`) moves a role from one
+  provider's endpoint to another's, the profile's credential does not follow
+  it.
+- An endpoint override (`--<role>-base-url`) carries the role key or the
+  profile's own credential to the endpoint it names. It carries a provider key
+  from the shell, or a stored credential, only when the endpoint it names is
+  that provider's built-in endpoint.
 
 A provider key in the user's shell is therefore never sent implicitly to a
-profile's custom endpoint, such as a gateway or a template's endpoint. A
-profile with such an endpoint must name its credential, and the name is not
-restricted: a profile, including one installed from a template, may set
-`endpoint: https://models.example.org/v1` with `api_key_env: OPENAI_API_KEY`,
-and that key is then sent to that endpoint. The install summary lists the
-credential variable of each profile that a role or author route selects, and
-the upload credential variables, so review it before relying on a template.
-`roast doctor` reports which source each role used, and names a provider key it
-withheld.
+profile's custom endpoint, such as a gateway. Such an endpoint needs a role
+key or a variable named by `api_key_env`. The name is not restricted: a config
+may set `endpoint: https://models.example.org/v1` with
+`api_key_env: OPENAI_API_KEY`, and that key is then sent to that endpoint.
+This is why such a config needs per-clone approval (see Trusted configuration)
+and why the approval summary lists every selected profile's credential
+variable. `npx roast doctor` reports which source each role used, and names a
+provider key it withheld.
 
 ## Network disclosure
 
 A review sends its prompt, selected diff or repository manifest, file content,
-tool schemas, and local tool results to the configured finder endpoint. Candidate
-findings and the code needed to adjudicate them are sent to the configured
-verifier endpoint. `roast doctor` makes two small inference requests to each
-configured role (a fixed probe prompt, one tool call and its result, then a
-submission) in addition to querying its model-listing endpoint.
+tool schemas, and local tool results to the configured finder endpoint.
+Candidate findings and the code needed to adjudicate them are sent to the
+configured verifier endpoint. `npx roast doctor` makes two small inference
+requests to each configured role (a fixed probe prompt, one tool call and its
+result, then a submission) in addition to querying its model-listing endpoint,
+and skips these probes for a config this clone has not approved. Roast makes
+no other network requests: it has no telemetry, update check, or run upload,
+apart from what `npx roast login` sends to a built-in provider when the user
+runs it (a key check, or OpenRouter's key exchange).
 
 Each inference request carries only the credential, base URL, and headers from
 Roast's resolved configuration. Roast ignores the provider SDKs' ambient
-defaults, such as `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS`, Anthropic
-profile files, `OPENAI_ORG_ID`, `OPENAI_PROJECT_ID`, and
-`OPENAI_CUSTOM_HEADERS`; `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and the
-`*_BASE_URL` variables apply only as inputs to Roast's own configuration.
-A profile's `session_header`, which a template may also set, only adds one more
-header carrying the per-conversation session ID; it cannot name a credential or
+defaults, such as `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS`,
+`ANTHROPIC_BASE_URL`, Anthropic profile files, `OPENAI_BASE_URL`,
+`OPENAI_ORG_ID`, `OPENAI_PROJECT_ID`, and `OPENAI_CUSTOM_HEADERS`;
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY` apply only as
+inputs to Roast's own credential resolution. A profile's `session_header` only adds one more header
+carrying the per-conversation session ID; it cannot name a credential or
 framing header, or one Roast or the provider SDK sets.
 
 Roast does not infer trust from a model name. An OpenAI-compatible gateway,
@@ -132,31 +149,15 @@ hosted provider, and local server are all treated as the operator-configured
 destination. Operators are responsible for checking those services' retention,
 training, and access-control policies before reviewing sensitive repositories.
 
-Run uploads are disabled by default. When enabled, Roast sends a deterministic
-bundle containing the complete local run record to the configured S3-compatible
-endpoint or presigned-upload broker. Upload endpoints, and the presigned URLs a
-broker returns, must use HTTPS unless they are on loopback or
-`upload.allow_insecure_http` is set. Failed uploads record the destination
-without a presigned URL's signed query string. The bundled broker expects
-authentication to be enforced by a trusted reverse proxy; it must not be
-exposed directly to untrusted clients.
-
-Builds that report a version other than `dev` check GitHub for a newer stable
-release by sending an unauthenticated `GET` to the repository's latest-release
-API endpoint, with Roast's version in the `User-Agent` header. These include
-release binaries, `go install` builds, and source builds from a Git checkout,
-which the Go toolchain stamps with a version. The check sends no review data,
-repository content, or credentials. Commands reuse a cached result for up to a
-day, `roast doctor` checks on each run, builds that report `dev` skip the check,
-and `ROAST_NO_UPDATE_CHECK=1` disables it.
-
 ## Local sensitive data
 
 Every non-empty review records the reviewed input, prompts, raw successful
 provider responses, findings, report, metadata, and a Git snapshot used for
 reproduction. These artifacts may contain proprietary source code, secrets
-already present in reviewed content, or sensitive model output. Protect the
-Roast data directory and repository's `refs/roast/snapshots/*` with the same
+already present in reviewed content, or sensitive model output. Run records
+live under `.roast/runs/` at the Git toplevel, which ignores itself through a
+`.gitignore` containing `*`, so they are not committed by accident. Protect
+that directory and the repository's `refs/roast/snapshots/*` with the same
 controls as the repository itself, and prune them according to local policy.
 
 On Unix, Roast creates managed run directories with owner-only (`0700`)
@@ -164,10 +165,11 @@ permissions and artifacts, monthly records, and bundles with `0600` permissions.
 Existing managed directories and files are tightened when written or reused.
 New bundle entries also use `0600`; cached bundles retain their original bytes
 and digest, so older archive entries may still carry their original permissions.
-Roast does not change permissions on an existing configured data root or its
+Roast does not change permissions on an existing `.roast/` directory or its
 ancestors, and Unix permission bits do not establish Windows ACL isolation.
 
-Known credential environment values are excluded from run metadata. Roast
+Known credential environment values and stored credentials are excluded
+from run metadata. Roast
 cannot guarantee that a repository, model, provider, or tool result will not
 echo a secret into an artifact or response.
 
@@ -202,9 +204,13 @@ and preserves the dispatcher and foreign hooks for other repositories. Existing
 Roast-owned dispatchers are refreshed to enforce this check when encountered;
 foreign scripts are not rewritten.
 
-The gate reviews staged content and fails open on operational errors. Use
-`roast gate status`, `roast gate enable`, and `roast gate disable` to inspect or
-change enrollment. `ROAST_SKIP=1` bypasses one commit.
+The hook runs only `node_modules/.bin/roast` at the Git toplevel, never a
+`roast` found on `PATH`, so a commit uses the version the project's lockfile
+pins. The gate reviews staged content and fails open on operational errors,
+including a missing binary and an unapproved project config. Use
+`npx roast gate status`, `npx roast gate enable`, and
+`npx roast gate disable` to inspect or change enrollment. `ROAST_SKIP=1`
+bypasses one commit.
 
 ## Vulnerability reports
 
