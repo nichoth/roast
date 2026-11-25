@@ -13,6 +13,7 @@ import hooks from
     './templates/finder_react_hooks_addendum.tmpl'
 import quickAddendum from
     './templates/finder_quick_addendum.tmpl'
+import singleCall from './templates/finder_single_call.tmpl'
 import verifier from
     './templates/verifier_system.tmpl'
 
@@ -21,7 +22,8 @@ export async function finderSystem (
     scope:string,
     quick:boolean,
     langs:ReadonlyArray<string>,
-    overridePath:string
+    overridePath:string,
+    interactive:boolean
 ):Promise<string> {
     let base:string
     try {
@@ -44,6 +46,7 @@ export async function finderSystem (
         }
         if (langs.includes('react')) base += hooks
     }
+    if (!interactive) base += singleCall
     if (quick) base += quickAddendum
     return base
 }

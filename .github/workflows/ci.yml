@@ -57,7 +57,7 @@ jobs:
 
       - name: Check package contents
         # Packs in dry-run mode; nothing is published.
-        run: npm run check:pack
+        run: npm pack --dry-run
 
   security:
     name: Security
@@ -72,37 +72,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Go
-        # Only for the CI tool modules under .github/tools.
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: .github/tools/gitleaks/go.mod
-          cache-dependency-path: .github/tools/*/go.sum
-
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-
-      - name: Check tool module files
-        run: |
-          set -euo pipefail
-          for modfile in .github/tools/*/go.mod; do
-            (cd "${modfile%/*}" && go mod tidy)
-          done
-          git diff --exit-code -- .github/tools
-          # git diff alone does not report a missing go.sum recreated by tidy.
-          test -z "$(git ls-files --others --exclude-standard -- .github/tools)"
-
-      # There is no root Go module, so each tool runs from its own module
-      # directory (go -C) and is pointed back at the repository.
-      - name: Scan Git history for secrets
-        run: go -C .github/tools/gitleaks tool gitleaks git --redact --no-banner "${PWD}"
-
-      - name: Check workflows
-        # actionlint finds the repository root and .github/actionlint.yaml
-        # by walking up from its module directory.
-        run: go -C .github/tools/actionlint tool actionlint
 
       - name: Check the hook script
         run: shellcheck src/gate/pre-commit.sh

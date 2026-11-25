@@ -90,7 +90,8 @@ export function toFinding (w:WireFinding):Finding {
         lines:w.lines?.length ? [...w.lines] : null,
         code_quote:w.code_quote,
         fixed_code:w.fixed_code,
-        frontend_category:w.frontend_category,
+        frontend_category:w.frontend_category === 'none' ?
+            '' : w.frontend_category,
     }
 }
 

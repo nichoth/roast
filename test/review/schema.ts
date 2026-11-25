@@ -96,3 +96,9 @@ test('direct final decoding preserves integer lexemes and int64 bounds', t => {
     t.ok(last.ok)
     if (last.ok) t.equal(last.value.severity, 'HIGH')
 })
+
+test('provider finding schema uses a nonempty category sentinel', t => {
+    const category = WIRE_FINDING_SCHEMA.properties.frontend_category
+    t.ok(!category.enum.includes(''), 'no empty enum value')
+    t.ok(category.enum.includes('none'), 'non-frontend value is explicit')
+})

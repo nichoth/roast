@@ -390,9 +390,9 @@ test('VERDICT_SCHEMA matches the spec with alphabetical keys', t => {
             recalibrated_severity:{
                 description:'If the finding is real but its severity is ' +
                     'overstated, the corrected LOWER severity, justified ' +
-                    'in grounding. Leave empty to keep the finder\'s ' +
-                    'severity. Never raise severity.',
-                enum:['', 'INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+                    'in grounding. Omit to keep the finder\'s severity. ' +
+                    'Never raise severity.',
+                enum:['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
                 type:'string',
             },
             status:{

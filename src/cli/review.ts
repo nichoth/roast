@@ -324,8 +324,26 @@ export async function runReview (
         const finderPrompt = (mode === 'prose' ?
             overrides.finder_prose :
             overrides.finder_code) ?? ''
+        let interactive = f.interactive && !f.quick
+        let maxTurns = f.maxTurns ?? DEFAULT_MAX_TURNS
+        if (survey) {
+            interactive = true
+            if (f.maxTurns === undefined) maxTurns = SURVEY_MAX_TURNS
+        }
+        if (interactive && !survey) {
+            const minLines = configInt(cfg.interactive?.min_diff_lines,
+                INTERACTIVE_MIN_DIFF_LINES)
+            const minFiles = configInt(cfg.interactive?.min_files,
+                INTERACTIVE_MIN_FILES)
+            if (countNewlines(sc.diff) < minLines &&
+                sc.files.length < minFiles) {
+                logf(ctx.stderr,
+                    'diff is small; using a single structured finder call')
+                interactive = false
+            }
+        }
         const system = await finderSystem(mode, f.scope, f.quick, langs,
-            promptPath(cfg, finderPrompt))
+            promptPath(cfg, finderPrompt), interactive)
         const verifierPrompt = await verifierSystem(
             promptPath(cfg, overrides.verifier ?? ''))
         const user = survey ?
@@ -355,24 +373,6 @@ export async function runReview (
         const maxAttempts = flagOrConfig(f.maxAttempts, limits.max_attempts,
             DEFAULT_LIMITS.max_attempts)
         const ledger = newLedger(maxTokensTotal)
-        let interactive = f.interactive && !f.quick
-        let maxTurns = f.maxTurns ?? DEFAULT_MAX_TURNS
-        if (survey) {
-            interactive = true
-            if (f.maxTurns === undefined) maxTurns = SURVEY_MAX_TURNS
-        }
-        if (interactive && !survey) {
-            const minLines = configInt(cfg.interactive?.min_diff_lines,
-                INTERACTIVE_MIN_DIFF_LINES)
-            const minFiles = configInt(cfg.interactive?.min_files,
-                INTERACTIVE_MIN_FILES)
-            if (countNewlines(sc.diff) < minLines &&
-                sc.files.length < minFiles) {
-                logf(ctx.stderr,
-                    'diff is small; using a single structured finder call')
-                interactive = false
-            }
-        }
         const deadlineDuration = flagOrConfig(f.deadline, limits.deadline,
             parseGoDuration(survey ? SURVEY_DEADLINE : DEFAULT_LIMITS.deadline))
         const deadline = deadlineDuration > 0n ?

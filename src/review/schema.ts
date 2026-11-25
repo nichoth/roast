@@ -39,9 +39,9 @@ export const WIRE_FINDING_SCHEMA = freeze({
         },
         frontend_category:{
             description:'Which frontend-addendum dimension produced this ' +
-                'finding; empty for non-frontend findings',
+                'finding; use none for other findings',
             enum:[
-                '',
+                'none',
                 'hooks',
                 'security',
                 'a11y',

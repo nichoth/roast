@@ -34,7 +34,7 @@ const CASES = [
 
 for (const { mode, scope, pieces } of CASES) {
     test(`finder system assembles ${mode}/${scope} assets`, async t => {
-        const output = await finderSystem(mode, scope, false, [], '')
+        const output = await finderSystem(mode, scope, false, [], '', true)
         let end = 0
         for (const piece of pieces) {
             const index = output.indexOf(piece)
@@ -58,7 +58,7 @@ test('finder override replaces only the base verbatim', async t => {
         await writeFile(path, override)
         for (const { mode, scope, pieces } of CASES) {
             const output = await finderSystem(
-                mode, scope, true, ['react', 'go', 'frontend'], path,
+                mode, scope, true, ['react', 'go', 'frontend'], path, true,
             )
             t.equal(output.slice(0, override.length), override,
                 'override is neither trimmed, rendered, nor defanged')
@@ -85,7 +85,7 @@ test('finder override read failures are ordinary errors', async t => {
         for (const path of [join(dir.dir, 'missing'), dir.dir]) {
             let caught:unknown
             try {
-                await finderSystem(mode, 'diff', false, [], path)
+                await finderSystem(mode, 'diff', false, [], path, true)
             } catch (error) {
                 caught = error
             }
@@ -153,7 +153,7 @@ for (const { langs, pieces } of LANGUAGE_CASES) {
         for (const { mode, scope, pieces:basePieces } of CASES) {
             for (const isQuick of [false, true]) {
                 const output = await finderSystem(
-                    mode, scope, isQuick, langs, '',
+                    mode, scope, isQuick, langs, '', true,
                 )
                 const selected = mode === 'prose' ? [] : pieces
                 let end = basePieces.reduce((n, piece) => n + piece.length, 0)
@@ -174,4 +174,30 @@ for (const { langs, pieces } of LANGUAGE_CASES) {
             }
         }
     })
+}
+
+for (const mode of ['code', 'mixed', 'prose']) {
+    test(`single-call ${mode} finder limits claims about unseen files`,
+        async t => {
+            const dir = tempDir()
+            t.cleanup(dir.remove)
+            const path = join(dir.dir, 'override.tmpl')
+            await writeFile(path, 'Custom core')
+            for (const override of ['', path]) {
+                const output = await finderSystem(
+                    mode, 'diff', true, ['frontend'], override, false,
+                )
+                const marker = 'Single-call review (no exploration tools'
+                t.ok(output.includes(marker), 'explains tools are absent')
+                t.ok(output.includes('not evidence that its target is absent'),
+                    'unseen paths are not reported as missing')
+                t.ok(output.indexOf(marker) < output.indexOf(quick),
+                    'single-call rules precede quick constraints')
+                const interactive = await finderSystem(
+                    mode, 'repo', false, [], override, true,
+                )
+                t.ok(!interactive.includes(marker),
+                    'interactive runs retain exploration instructions')
+            }
+        })
 }

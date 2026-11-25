@@ -91,3 +91,17 @@ test('review writes a complete run record', async t => {
     t.ok(!res.stdout.includes(FINDER_KEY) &&
         !res.stderr.includes(FINDER_KEY), 'no key in output')
 })
+
+for (const flags of [[], ['--quick'], ['--interactive']]) {
+    test(`single-call prompt follows actual finder mode: ${flags.join(' ')}`,
+        async t => {
+            const r = await settingsRepo(t)
+            const res = await r.roast(['review', '--no-verify', ...flags])
+            t.equal(res.code, 0, res.stderr)
+            const prompt = readGz(path.join(runDirs(r)[0],
+                'finder_system.gz'))
+            t.ok(prompt.includes('Single-call review (no exploration tools'),
+                'single calls receive the restricted context instructions')
+            t.equal(reviewMeta(r).derived.interactive, false)
+        })
+}

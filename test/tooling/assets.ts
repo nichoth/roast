@@ -11,6 +11,8 @@ import finderMixed from
 import finderProse from '../../src/prompts/templates/finder_prose.tmpl'
 import finderQuick from
     '../../src/prompts/templates/finder_quick_addendum.tmpl'
+import finderSingleCall from
+    '../../src/prompts/templates/finder_single_call.tmpl'
 import finderReactHooks from
     '../../src/prompts/templates/finder_react_hooks_addendum.tmpl'
 import finderScopeDiff from
@@ -38,6 +40,7 @@ const ASSETS:[string, string][] = [
     ['src/prompts/templates/finder_scope_survey.tmpl',
         finderScopeSurvey],
     ['src/prompts/templates/finder_user.tmpl', finderUser],
+    ['src/prompts/templates/finder_single_call.tmpl', finderSingleCall],
     ['src/prompts/templates/verifier_system.tmpl', verifierSystem],
     ['src/prompts/templates/verifier_user.tmpl', verifierUser],
     ['src/skill/assets/roast/SKILL.md', skill],

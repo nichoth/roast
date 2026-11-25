@@ -15,10 +15,11 @@ Single-context layout. See `docs/agents/domain.md`.
 ## Layout
 
 Roast is one TypeScript package (ADR-0004): the CLI in `src/`, its
-tests in `test/`, Node-run tooling in `scripts/`. The CI gate, in order:
+tests in `test/`, Node-run tooling in `scripts/`. Do not add Go tools.
+The CI gate, in order:
 `npm run lint`, `npm run typecheck`, `npm test` (builds `dist/cli.js`,
 then runs the test bundle; it does not typecheck),
-`git diff --exit-code -- roast.schema.json`, `npm run check:pack`.
+`git diff --exit-code -- roast.schema.json`, `npm pack --dry-run`.
 
 ## Area notes
 

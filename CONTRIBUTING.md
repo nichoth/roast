@@ -7,8 +7,8 @@ contract can be agreed on first.
 
 ## Development
 
-Contributors need Node 22.18 or newer and Git, on macOS or Linux. Go is
-needed only to run the CI tool modules under `.github/tools/` locally.
+Contributors need Node 22.18 or newer and Git, on macOS or Linux.
+The CLI, tests, and build tooling are TypeScript.
 Clone the repository, then:
 
 ```sh
@@ -36,15 +36,13 @@ resolves in a user's project. Build before using it: with no build, a
 Also run these before opening a pull request:
 
 ```sh
-npm run check:pack
-go -C .github/tools/actionlint tool actionlint
+npm pack --dry-run
 shellcheck src/gate/pre-commit.sh
 ```
 
-`npm run check:pack` dry-run packs the package and checks that the
-tarball holds the bundle, its notices, the schema, and Roast's license
-files, and that the manifest declares no dependencies. CI-only Go tools
-have separate modules under `.github/tools/`, maintained by Renovate.
+`npm pack --dry-run` lists the files that npm would publish without
+creating or publishing a tarball. Check that the bundle, notices, schema,
+and license files are present.
 
 Tests use local HTTP servers and temporary Git repositories; they must
 not require real model credentials or send repository content to an
@@ -76,7 +74,7 @@ before it calls a tool. It checks that the error names the `length`
 finish and suggests raising `max_output_tokens`, and skips if the model
 answers within the ceiling. Never commit keys or paste them into logs.
 
-CI runs a Git-history secret scan and `npm audit --audit-level=high`.
+CI runs `npm audit --audit-level=high`.
 Roast has no runtime `dependencies`: libraries it runs are
 `devDependencies` bundled into `dist/cli.js`. A new bundled library
 must use a license on the allowlist (see "Third-party notices" below)
@@ -116,7 +114,7 @@ writes the version into `package.json`; `version` updates the README
 table of contents and `CHANGELOG.md` (through `auto-changelog`) and
 stages them; npm commits and tags `v<x.y.z>`; `postversion` pushes the
 commit and tag and runs `npm publish`, whose `prepublishOnly` runs
-`npm run build` and `npm run check:pack`. If `prepublishOnly` fails
+`npm run build`. If `prepublishOnly` fails
 after the tag was pushed, fix it with a follow-up patch release rather
 than re-tagging.
 

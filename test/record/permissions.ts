@@ -75,3 +75,20 @@ test('finding spill is best effort when recording fails', async t => {
     await sink!(finding())
     t.ok((await fs.stat(path.join(dir, 'run/findings.jsonl'))).isDirectory())
 })
+
+test('finding spill stores report categories instead of model sentinels',
+    async t => {
+        const repo = recordRepo(t)
+        const dir = await recordDir(repo.dir, { env:repo.env })
+        const sink = await openFindingSpill(dir, 'run')
+        const input = finding({ frontend_category:'none' })
+        await sink!(input)
+        const raw = await fs.readFile(
+            path.join(dir, 'run/findings.jsonl'), 'utf8',
+        )
+        const stored = JSON.parse(raw)
+        t.equal(stored.finding.frontend_category, '')
+        t.equal(stored.fingerprint,
+            fingerprint(finding({ frontend_category:'' })))
+        t.equal(input.frontend_category, 'none')
+    })

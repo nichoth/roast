@@ -26,9 +26,9 @@
         "type": "string"
       },
       "frontend_category": {
-        "description": "Which frontend-addendum dimension produced this finding; empty for non-frontend findings",
+        "description": "Which frontend-addendum dimension produced this finding; use none for other findings",
         "enum": [
-          "",
+          "none",
           "hooks",
           "security",
           "a11y",
@@ -109,9 +109,9 @@
               "type": "string"
             },
             "frontend_category": {
-              "description": "Which frontend-addendum dimension produced this finding; empty for non-frontend findings",
+              "description": "Which frontend-addendum dimension produced this finding; use none for other findings",
               "enum": [
-                "",
+                "none",
                 "hooks",
                 "security",
                 "a11y",

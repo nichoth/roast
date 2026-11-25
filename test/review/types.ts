@@ -51,3 +51,13 @@ test('only confirmed lower recalibrations affect severity and maximum', t => {
     const medium = toFinding(wire({ severity:'MEDIUM' }))
     t.equal(maxSeverity({ findings:[f, medium] }), 2)
 })
+
+test('model category sentinel is normalized only at the report boundary',
+    t => {
+        for (const category of ['none', '', 'hooks', 'unknown']) {
+            const input = wire({ frontend_category:category })
+            t.equal(toFinding(input).frontend_category,
+                category === 'none' ? '' : category)
+            t.equal(input.frontend_category, category, 'wire is unchanged')
+        }
+    })
