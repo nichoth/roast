@@ -38,15 +38,9 @@
     "test:live": "node scripts/bundle.ts --live && bash -o pipefail -c 'node test/live-bundle.js | tap-spec'",
     "toc": "markdown-toc --maxdepth 3 -i README.md",
     "preversion": "npm run lint",
-    "version": "npm run toc && auto-changelog && npm run stage:docs",
-    "stage:docs": "git add CHANGELOG.md README.md",
+    "version": "npm run toc && git add README.md",
     "postversion": "git push --follow-tags && npm publish",
     "prepublishOnly": "npm run build"
-  },
-  "auto-changelog": {
-    "package": true,
-    "template": "keepachangelog",
-    "breakingPattern": "BREAKING CHANGE:"
   },
   "dependencies": {
     "yargs": "^18.2.0",
@@ -60,7 +54,6 @@
     "@types/yargs": "^17.0.33",
     "@typescript/typescript6": "^6.0.2",
     "ajv": "^8.20.0",
-    "auto-changelog": "^2.4.0",
     "esbuild": "^0.27.0",
     "eslint": "^10.6.0",
     "hermes-tiiny-router": "^2.1.3",
