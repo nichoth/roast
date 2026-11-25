@@ -1,6 +1,0 @@
-{"type":"session","version":3,"id":"01a20614-4f7f-731c-a75b-f72956f19ba2","timestamp":"2026-11-23T01:45:24.096Z","cwd":"/Users/nick/code/roast.ts-rewrite-18-run-records"}
-No API key found for anthropic.
-
-Use /login to log into a provider via OAuth or API key. See:
-  /Users/nick/.pi/agent/install/releases/1.6.0/node_modules/@earendil-works/pi-coding-agent/docs/providers.md
-  /Users/nick/.pi/agent/install/releases/1.6.0/node_modules/@earendil-works/pi-coding-agent/docs/models.md
