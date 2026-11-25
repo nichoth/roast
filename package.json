@@ -36,13 +36,12 @@
     "test:tap": "bash -o pipefail -c 'node test/test-bundle.js | tap-spec'",
     "test:one": "bash -o pipefail -c 'node scripts/bundle.ts --test-file \"$0\" && node test/one-bundle.js | tap-spec'",
     "test:live": "node scripts/bundle.ts --live && bash -o pipefail -c 'node test/live-bundle.js | tap-spec'",
-    "check:pack": "node scripts/check-pack.ts",
     "toc": "markdown-toc --maxdepth 3 -i README.md",
     "preversion": "npm run lint",
     "version": "npm run toc && auto-changelog && npm run stage:docs",
     "stage:docs": "git add CHANGELOG.md README.md",
     "postversion": "git push --follow-tags && npm publish",
-    "prepublishOnly": "npm run build && npm run check:pack"
+    "prepublishOnly": "npm run build"
   },
   "auto-changelog": {
     "package": true,

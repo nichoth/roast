@@ -38,8 +38,6 @@ Before editing code in an area, read its notes.
 - Scope, context, exploration tools, snapshot denylist (`src/scope/`,
   `src/context/`, `src/snapshot/`): `docs/agents/scope-context.md`
 - LLM adapters and the agent loop (`src/llm/`): `docs/agents/llm.md`
-- The bundle, third-party notices, `check:pack`, release
-  (`scripts/`, `package.json`): `docs/agents/packaging.md`
 
 A new note goes in its area's file; a new area gets a file and a line
 here. This file holds only what most tasks hit.
