@@ -3,9 +3,10 @@
 An adversarial, cross-model code reviewer. Install as a project dependency.
 
 A finder model proposes defects in a Git diff, each with a
-code quote and a concrete fix. An independent verifier model then re-reads the
-cited code and confirms or refutes every claim before it reaches the report.
-The two roles can use different providers, endpoints, and wire protocols.
+code quote and a concrete fix. An independent verifier model checks surviving
+claims against the cited code. Findings can remain unresolved; see
+[Use](#use) for how to interpret the report. The two roles can use different
+providers, endpoints, and wire protocols.
 
 In interactive mode, the models can navigate the local checkout
 via read-only file, grep, and listing tools.
@@ -52,7 +53,7 @@ The fork adds `npm` ecosystem.
 
 ## Quick start
 
-Roast runs in a Git repository with a `package.json`. It needs Node 22.18
+This should run in a Git repository with a `package.json`. It needs Node 22.18
 or later on macOS or Linux. Windows is not supported.
 
 The [agent skill](#install-the-agent-skill) is optional.
@@ -72,8 +73,7 @@ npx roast init
 ```
 
 This writes `.roast.json` in the current directory and adds `/.roast/` to
-`.gitignore`. Command `init` picks each role's provider from its
-model ID:
+`.gitignore`. Model flags route each role by its model ID:
 
 - a bare Claude model ID (`claude-opus-5-5`) uses Anthropic's Messages API
 - a bare OpenAI model ID (including Codex, `gpt-6.1-terra`) uses OpenAI's
@@ -86,19 +86,26 @@ Either model can fill either role. It's recommended to use models
 from different providers for each role.
 
 In an interactive terminal, `init` prompts for each role's provider
-and model when the corresponding flag is missing. The provider menu
-lists Anthropic, OpenAI, and OpenRouter; each model prompt suggests a
-default that Enter accepts. For a model that no built-in provider
-serves, edit `.roast.json` by hand
-(see [Project config](#project-config)).
+and model when the corresponding flag is missing. Choose Anthropic, OpenAI,
+OpenRouter, or Custom. Built-in providers suggest a model that Enter accepts.
+Custom asks for an endpoint URL, protocol (`chat`, `responses`, or
+`anthropic`), credential variable name, and model ID. The protocol defaults
+to `chat`; a blank credential variable uses the role's key variable unless
+a previous custom choice supplies the default. A blank model leaves a
+placeholder to edit. A custom model ID stays on the chosen
+endpoint, even when it has a slash. You can also configure a custom profile
+by editing `.roast.json` (see [Project config](#project-config)).
 
-Without an interactive terminal, `init` writes placeholder model IDs
-and prints a hint naming `--finder-model` and `--verifier-model`. A
-review refuses to run until you replace the placeholders in
-`.roast.json`.
+Without an interactive terminal, `init` writes placeholder model IDs for
+missing model flags and prints a hint naming those flags. Before a review,
+replace the models needed by that review in `.roast.json` or supply them with
+review flags. For example, `npx roast review --finder-model MODEL --no-verify`
+does not need a verifier model. Init model flags use the routing above;
+configure a custom endpoint interactively or in project config.
 
-In the terminal, `init` then offers to log in to each provider
-that has no credential yet (see [Login and logout](#login-and-logout)).
+In the terminal, `init` then offers to log in to each built-in provider
+used by a role that has no credential yet
+(see [Login and logout](#login-and-logout)).
 
 Flag `--no-login` skips the login process.
 
@@ -126,7 +133,7 @@ npx roast init --finder-model 'claude-opus-5-5' \
 
 ### 3. Login
 
-If you skipped the login process during `init`, log in now:
+If you skipped login for a built-in provider during `init`, log in now:
 
 ```sh
 npx roast login
@@ -137,8 +144,10 @@ provider that has no credentials yet. For Anthropic and OpenAI,
 it opens the provider's API-keys page. Create a key and paste it into the
 hidden prompt. For OpenRouter, it opens OpenRouter in your browser and
 receives a new key when you approve. The key is stored for this project
-inside `.git`, so it is never committed, and every later review, including
-the [pre-commit gate](#pre-commit-gate), finds it.
+inside `.git`, so it is never committed. Reviews, including the
+[pre-commit gate](#pre-commit-gate), can use it for that provider.
+Custom endpoints do not use stored credentials; set the variable named by
+`api_key_env` or the appropriate role key instead.
 
 Environment variables still work and take precedence over a stored key,
 which suits CI:
@@ -168,8 +177,8 @@ small probe.
 
 `npx roast review` reviews your changes and prints a report.
 
-A review needs an API key for the provider of each role's model, either
-stored with `npx roast login <provider>` or set in that provider's variable:
+A review needs a credential for each role. For a built-in provider, store
+a key with `npx roast login <provider>` or set its standard variable:
 `ANTHROPIC_API_KEY` for Anthropic's endpoint, `OPENAI_API_KEY` for OpenAI's,
 and `OPENROUTER_API_KEY` for OpenRouter's.
 
@@ -177,13 +186,14 @@ With both roles on Anthropic's endpoint, one Anthropic key is enough.
 Flags `--quick` and `--no-verify` skip the verifier, so they need only the
 finder's key. To give a role its own key,
 set `ROAST_FINDER_API_KEY` or `ROAST_VERIFIER_API_KEY`. If a key is missing,
-the review exits with an error, naming `npx roast login <provider>`, before
-it calls any model. See [Credentials](#credentials) for the full lookup
-order.
+the review exits with an error before it calls any model. Custom endpoints
+need the configured credential variable or the role key. See
+[Credentials](#credentials) for the full lookup order.
 
-The starter config only uses the built-in endpoints and key variables, so it
-needs no approval. If you change a profile's endpoint or credential variable,
-see [Trust](#trust).
+The starter needs no approval when all selected profiles use built-in
+endpoints, accepted protocols, and standard or implicit key variables, and
+there are no prompt overrides. Custom choices follow the rules in
+[Trust](#trust).
 
 
 ## Install the agent skill
@@ -305,11 +315,13 @@ A role's credential is the first of:
 5. the provider's key stored for your user by `npx roast login --global`.
 
 Steps 3 to 5 apply only when the profile uses a built-in provider's endpoint
-with a protocol that provider accepts there. A provider key in your shell,
-or a stored key, is never sent to a gateway or any other custom endpoint,
-and never follows a role that an override moved off its provider's
-endpoint. A stored key is matched to a role only by that endpoint and
-protocol, never by anything `.roast.json` names. A custom endpoint needs
+with a protocol that provider accepts there. A provider key in your shell
+is not implicitly sent to a custom endpoint,
+and a stored key is never sent there. Neither follows a role that an
+override moved off its provider's endpoint. A profile may explicitly name
+a provider key variable for a custom endpoint, subject to trust approval.
+A stored key is matched to a role only by that endpoint and protocol, never
+by anything `.roast.json` names. A custom endpoint needs
 `api_key_env` or a role key (`ROAST_FINDER_API_KEY` or
 `ROAST_VERIFIER_API_KEY`). `npx roast doctor` reports which source each role
 used, including a stored key and its scope, and names a provider key it
@@ -447,8 +459,8 @@ The `limits` and `gate` sections are described under
 [Resource limits](#resource-limits) and [Pre-commit gate](#pre-commit-gate).
 `npx roast init` writes them as commented-out defaults.
 
-Runs record the profile name and resolved non-secret settings, never API keys.
-The invocation argv is recorded, so keep secrets out of command-line values.
+Run metadata includes profile names and resolved non-secret settings. Keep
+credentials out of command-line values: the invocation argv is recorded.
 
 ### Network
 
@@ -529,6 +541,15 @@ instead, and Roast says so; the `interactive` config section changes those
 thresholds. `--quick` turns navigation off. `--scope repo` always navigates
 and rejects `--quick`.
 
+The verifier can confirm a finding, refute it, or report insufficient context.
+Confirmed and insufficient-context findings remain in the report; grounded
+refutations move to `dropped_findings`. A refutation without grounding is
+treated as undecided and retained. Findings can also be dropped before
+verification, for example when their finder confidence is below the floor.
+`--quick` and `--no-verify` skip verification. The per-run verifier cap, an
+exhausted token budget, or a verifier failure can leave findings undecided
+and retained, making the run partial. Check findings against the cited code.
+
 The finder and verifier must submit schema-validated results through a tool
 call. A role that never does gets bounded reminders within its limits; if it
 still fails, the run is reported incomplete, never clean.
@@ -595,29 +616,42 @@ review output:
 
 ## Run records
 
-Every non-empty review is recorded under `.roast/runs/` at the Git toplevel,
-even when you run Roast from a subdirectory. When Roast creates `.roast/` it
-writes a `.gitignore` inside it containing `*`, so records are never committed
-by accident; `npx roast ignore` (which `init` runs for you) also adds
-`/.roast/` to the toplevel `.gitignore` to make the rule visible. A run holds
-the secret-free role configuration, argv, exact prompts and reviewed input,
-raw provider response bodies (streamed SSE kept byte-for-byte, including
-partial streams from failed attempts), usage, results, a Git snapshot, and a
-deterministic `bundle.tar.zst` whose manifest lists every artifact's size and
-SHA-256. Requests, HTTP headers, and credentials are never recorded. Run
-directories are kept until you delete them.
+A non-empty review is kept under `.roast/runs/` at the Git toplevel once
+record initialization succeeds, even when run from a subdirectory. Early
+failures, such as an invalid mode or oversized finder prompt, leave no run
+record. Later failures can leave a record with evidence from the attempt.
+When Roast creates `.roast/`, it writes a `.gitignore` inside it containing
+`*`, so records are not committed by accident; `npx roast ignore` (which
+`init` runs for you) adds `/.roast/` to the toplevel `.gitignore` to make the
+rule visible. A run can retain role configuration, argv, exact prompts and
+reviewed input, raw provider response bodies (streamed SSE kept byte-for-byte,
+including partial streams from failed attempts), usage, and results. A
+deterministic `bundle.tar.zst` has a manifest listing artifact sizes and
+SHA-256 digests. Run directories are kept until you delete them.
 
-The navigation tools read the snapshot, not the live checkout: the captured
-index for `--staged`, otherwise the captured worktree including non-ignored
-untracked files. Editing files mid-review changes nothing the models see.
+Roast excludes resolved authentication material from dedicated metadata and
+does not record HTTP authentication headers. Recorded content is not generally
+redacted: reviewed input, prompts, arguments, and provider responses can
+contain or echo credentials. Keep secrets out of command-line values and
+protect run records and snapshot refs as sensitive artifacts. See the
+[security model](docs/security-model.md#local-sensitive-data).
 
-Snapshots are Git refs under `refs/roast/snapshots/`.
-`npx roast runs checkout <run-id> [dir]` restores one as a detached linked
-worktree, with the reviewed contents on disk and the reviewed index staged, so
-`git status` and `git diff` show exactly what was reviewed.
-`npx roast runs prune` removes snapshot refs older than 30 days (`--dry-run`
-to preview) but never run directories. Setting `review.snapshot` to `false`
-skips snapshot capture, so such a run cannot be checked out.
+For `--staged`, navigation reads a pinned copy of the index, not unstaged
+worktree changes. Other scopes normally read a pinned worktree, including
+non-ignored untracked files. Pinning is separate from retaining a snapshot:
+setting `review.snapshot` to `false` skips persistent capture but does not
+disable pinned reads. If worktree pinning fails, Roast warns and reads live
+files, blocking `.git`, ignored paths, and denylisted untracked files.
+Concurrent edits can affect live reads; these restrictions do not filter every
+credential or make all readable content safe. See the
+[security model](docs/security-model.md#untrusted-repository-and-model-input).
+
+Snapshot capture can be disabled with `review.snapshot: false` or fail. When
+capture succeeds, snapshots are Git refs under `refs/roast/snapshots/`.
+`npx roast runs checkout <run-id> [dir]` requires a saved snapshot that is
+still available. It restores a detached linked worktree with the captured
+contents and index. `npx roast runs prune` removes snapshot refs older than
+30 days (`--dry-run` to preview) but never run directories.
 
 ## Pre-commit gate
 

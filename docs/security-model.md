@@ -61,9 +61,11 @@ configuration by committing `.roast.json`, which every clone then approves
 under the per-clone trust described above. An organization that wants a
 common configuration can publish a starter file for teams to copy into their
 repositories; once copied, it is an ordinary project config and is approved,
-reviewed, and changed like any other committed file. `npx roast init` writes a
-starter that uses only the built-in provider endpoints and key variables, so
-it needs no approval until someone points a profile elsewhere.
+reviewed, and changed like any other committed file. `npx roast init` can
+write profiles for built-in providers or an interactively selected custom
+endpoint. A starter needs no approval only when its selected profiles and
+prompt overrides meet the conditions above. When approval is needed,
+interactive init offers it; declining leaves the config unapproved.
 
 ## Credentials and endpoints
 
@@ -125,10 +127,11 @@ provider key it withheld.
 
 A review sends its prompt, selected diff or repository manifest, file content,
 tool schemas, and local tool results to the configured finder endpoint.
-Candidate findings and the code needed to adjudicate them are sent to the
-configured verifier endpoint. `npx roast doctor` makes two small inference
-requests to each configured role (a fixed probe prompt, one tool call and its
-result, then a submission) in addition to querying its model-listing endpoint,
+When verification runs, candidate findings and the code needed to adjudicate
+them are sent to the configured verifier endpoint. `npx roast doctor` makes
+two small inference requests to each configured role (a fixed probe prompt,
+one tool call and its result, then a submission) in addition to querying its
+model-listing endpoint,
 and skips these probes for a config this clone has not approved. Roast makes
 no other network requests: it has no telemetry, update check, or run upload,
 apart from what `npx roast login` sends to a built-in provider when the user
@@ -151,10 +154,14 @@ training, and access-control policies before reviewing sensitive repositories.
 
 ## Local sensitive data
 
-Every non-empty review records the reviewed input, prompts, raw successful
-provider responses, findings, report, metadata, and a Git snapshot used for
-reproduction. These artifacts may contain proprietary source code, secrets
-already present in reviewed content, or sensitive model output. Run records
+Once run record initialization succeeds, a non-empty review can retain the
+reviewed input, prompts, arguments, raw provider responses (including partial
+streams from failed attempts), findings, report, and metadata. Early failures,
+such as an invalid mode or oversized finder prompt, leave no run record; later
+failures can leave evidence. Snapshot capture can be disabled with
+`review.snapshot: false` or fail; checkout requires a saved snapshot that
+remains available. These artifacts may contain proprietary source code,
+secrets in reviewed content, or sensitive model output. Run records
 live under `.roast/runs/` at the Git toplevel, which ignores itself through a
 `.gitignore` containing `*`, so they are not committed by accident. Protect
 that directory and the repository's `refs/roast/snapshots/*` with the same
@@ -168,25 +175,32 @@ and digest, so older archive entries may still carry their original permissions.
 Roast does not change permissions on an existing `.roast/` directory or its
 ancestors, and Unix permission bits do not establish Windows ACL isolation.
 
-Known credential environment values and stored credentials are excluded
-from run metadata. Roast
-cannot guarantee that a repository, model, provider, or tool result will not
-echo a secret into an artifact or response.
+Roast excludes resolved authentication material from dedicated metadata and
+does not record HTTP authentication headers. It does not comprehensively
+redact recorded content: reviewed input, prompts, arguments, tool results, or
+provider responses may contain or echo credentials. Keep credentials out of
+command-line values and handle these artifacts accordingly.
 
 ## Untrusted repository and model input
 
 Repository paths supplied by a model are confined beneath the reviewed tree;
 absolute paths, traversal, unsafe Git revision spellings, escaping symlinks,
-and paths inside `.git` are rejected. Every review reads a pinned Git tree, even
-when no replayable snapshot can be recorded, so concurrent checkout changes
-cannot alter the evidence seen during a run. If Git cannot write that tree,
-Roast reads the live working tree instead but refuses ignored files and
-untracked files matching its secret denylist.
+and paths inside `.git` are rejected. A staged review pins the index for
+reads; failure to pin it stops the review. Other scopes normally read a
+pinned worktree, including non-ignored untracked files. Pinning is separate
+from persistent snapshot capture: `review.snapshot: false` disables capture,
+not pinning. If worktree pinning fails, Roast warns and reads the live
+working tree instead. Live reads block `.git`, ignored paths, and denylisted
+untracked files. Concurrent edits can affect live reads, and these restrictions
+do not guarantee that readable content is free of credentials or other
+sensitive data.
 
 Model output is schema-validated. Findings without a source quote grounded in
-the reviewed corpus are dropped, and a separately configured verifier checks
-surviving claims. These checks reduce accidental fabrication; they do not make
-model output trusted executable input.
+the reviewed corpus are dropped, and a separately configured verifier can
+check surviving claims. Confirmed and insufficient-context findings remain
+reported; grounded refutations are dropped. Verification may be skipped or
+leave findings undecided because of limits or failures. These checks reduce
+accidental fabrication; they do not make model output trusted executable input.
 
 ## Git hooks
 

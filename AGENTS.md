@@ -44,6 +44,9 @@ here. This file holds only what most tasks hit.
 
 ## Traps every task hits
 
+- `npm run test:one` writes a shared bundle; run single-file suites
+  sequentially to avoid executing the wrong suite.
+
 - `JSON.parse` syntax errors can quote the input. Credential-file parse
   errors must use value-free messages so diagnostic output cannot expose
   a stored key.
@@ -51,6 +54,8 @@ here. This file holds only what most tasks hit.
   `process.env.PATH`, a heredoc or command containing `env:` or `.env`
   text, or a `credentials*` path together with `cat`, `sed`, `head`, and
   the like. Read and write such files with the editor tools.
+- Review record initialization follows scope and prompt validation; early
+  failures can leave no record, while later failures can retain evidence.
 - Tests that write project state (run records, trust, stored
   credentials) chdir into a temporary Git repository first. `.roast/`
   ignores itself, so a leak into this checkout is invisible to
@@ -72,6 +77,8 @@ here. This file holds only what most tasks hit.
 - Browser-login tests send callbacks with the real fetch; the injected
   provider fetch rewrites every origin. Bound callback tests with
   `loginTimeouts.browser` and set injected display variables on Linux.
+- After editing the bundled Roast skill, run `npm run test:one --
+  test/skill/assets.ts` to check that bundled bytes match the source.
 - Starter comments and runtime config/gate settings share defaults in
   `src/config/defaults.ts`. Review flag defaults should use that module
   too, so starter guidance stays aligned with runtime behavior.
@@ -90,3 +97,6 @@ here. This file holds only what most tasks hit.
 - CLI messages in `src/cli/` (for example the gate hint printed
   during review) still say bare `roast`; changing them is a code change,
   not a docs change.
+- Run records can retain arbitrary sensitive content. Metadata excludes
+  resolved authentication material and response capture omits HTTP headers,
+  but neither is comprehensive redaction of artifact content.

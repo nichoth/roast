@@ -6,8 +6,10 @@ description: Adversarial cross-model review in which a finder proposes defects a
 # Roast
 
 Roast reviews local Git changes with two independently configured models. The
-finder looks aggressively for defects; the verifier re-reads the cited code and
-confirms or refutes each candidate before it reaches the final report.
+finder looks aggressively for defects; the verifier checks surviving candidates
+against the cited code when verification runs. It can confirm, refute, or
+report insufficient context. Confirmed and insufficient-context findings stay
+in the report; grounded refutations move to dropped findings.
 
 ## Setup and trust boundary
 
@@ -24,9 +26,16 @@ walking up from the working directory no further than the Git toplevel;
 file. If there is none, `npx roast init` writes a starter. A profile selects
 an endpoint, model, wire protocol (`responses`, `chat`, or `anthropic`),
 credential environment variable, and output limit. The finder and verifier
-may use different profiles and protocols. `npx roast init` places a bare
-Claude or OpenAI model ID on that vendor's API and a slash-form ID
-(`anthropic/claude-opus-5-5`) on OpenRouter.
+may use different profiles and protocols. Model flags to `npx roast init`
+place a bare Claude or OpenAI model ID on that vendor's API and a slash-form
+ID (`anthropic/claude-opus-5-5`) on OpenRouter. In an interactive terminal,
+roles without model flags prompt for a built-in provider or Custom. Custom
+prompts for an endpoint URL, protocol, credential variable name, and model;
+its model stays on that endpoint even if the ID contains a slash. A blank
+credential variable uses the role key unless a previous custom choice
+supplies the default; a blank model leaves a placeholder.
+Without a terminal, missing model flags leave placeholders to edit in the
+project config; custom endpoints can also be configured there.
 
 Set up credentials with `npx roast login`: with no argument it logs in to
 each built-in provider (`anthropic`, `openai`, `openrouter`) the config uses
@@ -37,7 +46,10 @@ run it rather than running it yourself. Environment variables
 (`ROAST_FINDER_API_KEY` or `ROAST_VERIFIER_API_KEY`, the profile's
 `api_key_env`, then `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
 `OPENROUTER_API_KEY`) take precedence over a stored key. A stored or
-standard provider key goes only to that provider's built-in endpoint.
+standard provider key is used implicitly only at that provider's built-in
+endpoint. A custom endpoint needs the role key or its `api_key_env`; login
+does not store custom endpoint credentials. A config can explicitly name a
+provider's key variable for a custom endpoint, subject to trust approval.
 `npx roast logout` removes a stored key. `npx roast doctor` reports where
 each role's credential comes from.
 
@@ -79,9 +91,12 @@ npx roast runs show <run-id>
 npx roast doctor
 ```
 
-`--quick` skips independent verification and is a draft result. Repository
-survey mode is prioritized sampling, not exhaustive coverage. A `NO_DIFF`
-result means no review ran; it is not a clean review.
+`--quick` and `--no-verify` skip independent verification. Treat their
+findings as unverified; `--quick` is a draft result. The per-run verifier cap,
+token exhaustion, or verifier failure can leave findings undecided and retained
+in a partial run. Repository survey mode is prioritized sampling, not
+exhaustive coverage. A `NO_DIFF` result means no review ran; it is not a
+clean review.
 
 Roast writes JSON to stdout and a Markdown report to stderr by default. Exit 0
 means the command completed without a finding at the requested gate threshold;
@@ -89,9 +104,19 @@ exit 1 means a finding met that threshold; exit 2 is invalid usage or config;
 exit 3 is authentication; exit 4 is an operational or resource failure; and
 exit 5 is cancellation.
 
-Every non-empty review records a durable local run under `.roast/runs/` at the
-Git toplevel. Replay and evaluation tooling are intentionally not part of the
-`roast` command.
+A non-empty review gets a local run record under `.roast/runs/` at the Git
+toplevel once record initialization succeeds. Early failures, such as an
+invalid mode or oversized finder prompt, leave no record; later failures can
+retain evidence. Snapshot capture can be disabled with `review.snapshot` or
+fail; checkout requires a saved snapshot that remains available. Replay and
+evaluation tooling are intentionally not part of the `roast` command.
+
+Run records can contain reviewed input, prompts, arguments, and raw provider
+responses, including partial streams. Resolved authentication material is
+excluded from dedicated metadata and HTTP authentication headers are omitted,
+but recorded content can contain or echo credentials. Handle run records and
+snapshot refs as sensitive artifacts; keep credentials out of command-line
+values.
 
 ## Handling findings
 

@@ -2,7 +2,7 @@
 
 An adversarial, cross-model code reviewer installed as a project dependency
 via npm. One model proposes defects in a Git diff and a second model checks
-each one before it reaches the report.
+surviving candidates when verification runs.
 
 ## Language
 
@@ -13,8 +13,8 @@ The role whose model reads the diff and proposes candidate findings.
 _Avoid_: reviewer, author model
 
 **Verifier**:
-The role whose model re-reads the cited code and confirms or refutes each
-candidate finding.
+The role whose model checks candidate findings against the cited code. It
+can confirm, refute, or report insufficient context for a finding.
 _Avoid_: checker, judge
 
 **Role**:
@@ -28,6 +28,9 @@ _Avoid_: provider, backend
 
 **Run record**:
 The stored evidence of one review, kept inside the project that was reviewed.
+It can contain sensitive reviewed content, prompts, arguments, and provider
+responses; excluding resolved authentication material from dedicated metadata
+does not make the recorded content credential-free.
 _Avoid_: log, history
 
 **Gate**:
@@ -59,8 +62,9 @@ _Avoid_: secret, token
 A provider Roast knows by name (OpenAI, Anthropic, OpenRouter): its
 endpoint, the protocols it accepts there, its standard key variable, and
 how to log in.
-A profile on a built-in provider's endpoint with its standard key variable
-needs no trust approval.
+A selected profile on a built-in provider's endpoint with an accepted
+protocol and its standard or implicit key variable requires no approval on
+its own; other selected profiles and prompt overrides also matter.
 _Avoid_: default provider, known provider
 
 **Stored credential**:
