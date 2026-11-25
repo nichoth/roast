@@ -65,9 +65,6 @@ to run reviews for you.
 npm i -D @substrate-system/roast
 ```
 
-`npx roast --version` prints the installed version, commit, and build
-date.
-
 ### 2. Create the project config
 
 ```sh
@@ -85,16 +82,34 @@ model ID:
   (`anthropic/claude-opus-5-5`, `meta-llama/llama-4:free`), uses
   [OpenRouter](#openrouter).
 
-Either model can fill either role. It's recommended to use models from different 
-providers for each roles. For a model no built-in provider serves,
-edit `.roast.json` by hand (see [Project config](#project-config)).
-Without the flags, `init` writes placeholder model IDs,
-and a review refuses to run until you replace them in `.roast.json`.
+Either model can fill either role. It's recommended to use models
+from different providers for each role.
+
+In an interactive terminal, `init` prompts for each role's provider
+and model when the corresponding flag is missing. The provider menu
+lists Anthropic, OpenAI, and OpenRouter; each model prompt suggests a
+default that Enter accepts. For a model that no built-in provider
+serves, edit `.roast.json` by hand
+(see [Project config](#project-config)).
+
+Without an interactive terminal, `init` writes placeholder model IDs
+and prints a hint naming `--finder-model` and `--verifier-model`. A
+review refuses to run until you replace the placeholders in
+`.roast.json`.
 
 In the terminal, `init` then offers to log in to each provider
 that has no credential yet (see [Login and logout](#login-and-logout)).
 
 Flag `--no-login` skips the login process.
+
+When the written config needs trust approval -- for example because it
+names a custom endpoint or a non-standard credential variable -- `init`
+prints a summary of every security-relevant value and asks whether to
+approve. The default is No. Answering Yes records the approval so the
+first review is not refused; answering No (or pressing Enter) skips
+approval and `init` still succeeds. You can approve later with
+`npx roast trust`. The trust offer only appears in an interactive
+terminal.
 
 
 #### `init` Example

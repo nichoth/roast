@@ -49,9 +49,13 @@
     "template": "keepachangelog",
     "breakingPattern": "BREAKING CHANGE:"
   },
+  "dependencies": {
+    "yargs": "^18.2.0",
+    "zod": "^4.6.7"
+  },
   "devDependencies": {
     "@substrate-system/debug": "^0.9.64",
-    "@substrate-system/redeye": "^0.1.8",
+    "@substrate-system/redeye": "^0.1.9",
     "@substrate-system/tapzero": "^0.10.15",
     "@types/node": "^22.18.0",
     "@types/yargs": "^17.0.33",
@@ -67,9 +71,7 @@
     "tap-spec": "^5.0.0",
     "tiiny-router-pi": "^0.0.5",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.62.0",
-    "yargs": "^18.2.0",
-    "zod": "^4.6.7"
+    "typescript-eslint": "^8.62.0"
   },
   "overrides": {
     "typescript": "$typescript"

@@ -18,6 +18,17 @@ export const DEFAULT_LIMITS = Object.freeze({
     max_verified:25,
 })
 
+// Suggested model IDs for each built-in provider, used by the
+// starter and the UnplaceableModelError hint.
+export const SUGGESTED_MODELS = Object.freeze({
+    anthropic:'claude-opus-5-5',
+    openai:'gpt-6.1-terra',
+    openrouter:Object.freeze([
+        'anthropic/claude-opus-5-5',
+        'openai/gpt-6.1-terra',
+    ] as const),
+})
+
 // Review flag defaults that have no config key. Survey values apply
 // with `--scope repo`; quick values with `--quick`.
 export const DEFAULT_REVIEW_MAX_TURNS = 16

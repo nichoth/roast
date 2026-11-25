@@ -58,3 +58,5 @@
   publishes; `prepublishOnly` builds and runs `check:pack`. A failing
   `prepublishOnly` after the tag is pushed is fixed by a follow-up patch
   release, never by re-tagging.
+- Update the suggested model IDs in `SUGGESTED_MODELS` (`defaults.ts`)
+  and the README `init` example together when model names change.

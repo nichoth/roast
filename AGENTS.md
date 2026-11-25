@@ -65,6 +65,9 @@ here. This file holds only what most tasks hit.
 - The CLI parser preserves dashed option names and disables boolean
   negation. Declare flags such as `no-browser` explicitly and read
   `args['no-browser']`, rather than a camel-case property.
+- `init` login-offer tests that use `simulateTerminals(t, true)` must
+  pass `--finder-model` and `--verifier-model` flags, otherwise
+  interactive prompts consume stdin before the login offers see it.
 - `simulateTerminals` only bypasses interactive-terminal detection. To
   exercise raw-mode prompt input through the CLI, give stdin an `isTTY`
   value of `true` and a `setRawMode` function; assert raw mode is restored.

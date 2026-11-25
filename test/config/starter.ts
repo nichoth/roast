@@ -2,10 +2,17 @@ import { test } from '../helpers/test.js'
 import { decode, normalize } from '../../src/config/load.js'
 import {
     starter,
+    starterFromModels,
     UnplaceableModelError,
 } from '../../src/config/starter.js'
+import type {
+    RoleChoice, CustomChoice,
+} from '../../src/config/starter.js'
 import { thrown } from './helpers.js'
-import { DEFAULT_LIMITS } from '../../src/config/defaults.js'
+import {
+    DEFAULT_LIMITS,
+    SUGGESTED_MODELS,
+} from '../../src/config/defaults.js'
 import { gateOffers, snapshotEnabled } from '../../src/config/load.js'
 import {
     GATE_DEFAULT_TIMEOUT,
@@ -40,7 +47,9 @@ test('starter places models and separates different models', t => {
             'OPENROUTER_API_KEY'],
     }
     for (const [finder, verifier, fAt, vAt, count] of cases) {
-        const cfg = normalize(decode(starter(finder, verifier)), '')
+        const cfg = normalize(
+            decode(starterFromModels(finder, verifier)), ''
+        )
         t.equal(Object.keys(cfg.inference_profiles).length, count)
         for (const [role, at, model] of [
             ['finder', fAt, finder], ['verifier', vAt, verifier],
@@ -65,9 +74,14 @@ test('starter gives default and OpenRouter profiles stable names', t => {
         ['anthropic/claude-x', 'openai/gpt-5',
             ['openrouter-finder', 'openrouter-verifier']],
     ] as const) {
-        const cfg = normalize(decode(starter(f, v)), '')
-        t.deepEqual([cfg.roles.finder!.profile, cfg.roles.verifier!.profile],
-            [...names])
+        const cfg = normalize(decode(starterFromModels(f, v)), '')
+        t.deepEqual(
+            [
+                cfg.roles.finder!.profile,
+                cfg.roles.verifier!.profile,
+            ],
+            [...names]
+        )
     }
 })
 
@@ -82,7 +96,7 @@ test('starter rejects unplaceable IDs with role and trimmed model', t => {
         'openai/gpt-5/mini', 'meta-llama/llama-4:',
     ]) {
         for (const role of ['finder', 'verifier']) {
-            const err = thrown(() => starter(
+            const err = thrown(() => starterFromModels(
                 role === 'finder' ? ` ${model} ` : '',
                 role === 'verifier' ? ` ${model} ` : ''
             ))
@@ -92,12 +106,185 @@ test('starter rejects unplaceable IDs with role and trimmed model', t => {
             t.equal(err.model, model)
         }
     }
-    const first = thrown(() => starter('invalid-finder', 'invalid-verifier'))
+    const first = thrown(() => starterFromModels(
+        'invalid-finder', 'invalid-verifier'
+    ))
     t.equal((first as UnplaceableModelError).role, 'finder')
 })
 
+test('suggested model constants exist for each built-in provider', t => {
+    t.ok(SUGGESTED_MODELS.anthropic, 'anthropic suggested model')
+    t.ok(SUGGESTED_MODELS.openai, 'openai suggested model')
+    t.ok(SUGGESTED_MODELS.openrouter, 'openrouter suggested models')
+    t.equal(SUGGESTED_MODELS.anthropic, 'claude-opus-5-5')
+    t.equal(SUGGESTED_MODELS.openai, 'gpt-6.1-terra')
+    t.ok(
+        SUGGESTED_MODELS.openrouter.includes(
+            'anthropic/claude-opus-5-5'
+        ),
+        'openrouter has anthropic slug'
+    )
+    t.ok(
+        SUGGESTED_MODELS.openrouter.includes(
+            'openai/gpt-6.1-terra'
+        ),
+        'openrouter has openai slug'
+    )
+})
+
+test('starter accepts RoleChoice per role', t => {
+    const finder:RoleChoice = {
+        provider:'openai', model:'gpt-5'
+    }
+    const verifier:RoleChoice = {
+        provider:'anthropic', model:'claude-opus-5-5'
+    }
+    const cfg = normalize(decode(starter(finder, verifier)), '')
+    const fp = cfg.inference_profiles[cfg.roles.finder!.profile!]!
+    const vp = cfg.inference_profiles[cfg.roles.verifier!.profile!]!
+    t.equal(fp.model, 'gpt-5')
+    t.equal(vp.model, 'claude-opus-5-5')
+    t.equal(fp.endpoint, 'https://api.openai.com/v1')
+    t.equal(vp.endpoint, 'https://api.anthropic.com/v1')
+})
+
+test('starterFromModels produces same output as old starter', t => {
+    const cases:[string, string][] = [
+        ['', ''],
+        ['claude-opus-5-5', 'gpt-5'],
+        ['gpt-5', 'claude-sonnet-5-5'],
+        ['claude-opus-5-5', ''],
+        ['', 'gpt-5'],
+        ['anthropic/claude-x', 'openai/gpt-5'],
+    ]
+    for (const [f, v] of cases) {
+        const cfg = normalize(
+            decode(starterFromModels(f, v)), ''
+        )
+        const fp = cfg.inference_profiles[
+            cfg.roles.finder!.profile!
+        ]!
+        const vp = cfg.inference_profiles[
+            cfg.roles.verifier!.profile!
+        ]!
+        t.ok(fp.model, `finder model set for [${f}, ${v}]`)
+        t.ok(vp.model, `verifier model set for [${f}, ${v}]`)
+    }
+})
+
+test('UnplaceableModelError uses suggested model constants', t => {
+    const err = new UnplaceableModelError('finder', 'bad-model')
+    t.ok(
+        err.message.includes(SUGGESTED_MODELS.anthropic),
+        'mentions anthropic suggested model'
+    )
+    t.ok(
+        err.message.includes(
+            SUGGESTED_MODELS.openrouter[0]!
+        ),
+        'mentions openrouter suggested model'
+    )
+})
+
+test('starter custom profile with api_key_env loads correctly',
+    t => {
+        const finder:CustomChoice = {
+            kind:'custom',
+            endpoint:'http://openai.api.tiiny/v1',
+            protocol:'chat',
+            apiKeyEnv:'TIINY_KEY',
+            model:'Qwen/Qwen3.6-35B-A3B',
+        }
+        const verifier:RoleChoice = {
+            provider:'anthropic', model:'claude-opus-5-5'
+        }
+        const cfg = normalize(decode(starter(finder, verifier)), '')
+        const fp = cfg.inference_profiles[
+            cfg.roles.finder!.profile!
+        ]!
+        t.equal(fp.endpoint,
+            'http://openai.api.tiiny/v1')
+        t.equal(fp.protocol, 'chat')
+        t.equal(fp.api_key_env, 'TIINY_KEY')
+        t.equal(fp.model, 'Qwen/Qwen3.6-35B-A3B')
+        t.equal(cfg.roles.finder!.profile, 'custom')
+    })
+
+test('starter custom profile without api_key_env loads correctly',
+    t => {
+        const finder:CustomChoice = {
+            kind:'custom',
+            endpoint:'http://openai.api.tiiny/v1',
+            protocol:'chat',
+            apiKeyEnv:'',
+            model:'openai/gpt-oss-20b',
+        }
+        const verifier:RoleChoice = {
+            provider:'openai', model:'gpt-5'
+        }
+        const cfg = normalize(decode(starter(finder, verifier)), '')
+        const fp = cfg.inference_profiles[
+            cfg.roles.finder!.profile!
+        ]!
+        t.equal(fp.endpoint,
+            'http://openai.api.tiiny/v1')
+        t.equal(fp.protocol, 'chat')
+        t.equal(fp.api_key_env, undefined)
+        t.equal(fp.model, 'openai/gpt-oss-20b')
+    })
+
+test('starter two custom roles different settings split names',
+    t => {
+        const finder:CustomChoice = {
+            kind:'custom',
+            endpoint:'http://openai.api.tiiny/v1',
+            protocol:'chat',
+            apiKeyEnv:'TIINY_KEY',
+            model:'Qwen/Qwen3.6-35B-A3B',
+        }
+        const verifier:CustomChoice = {
+            kind:'custom',
+            endpoint:'http://localhost:8080/v1',
+            protocol:'responses',
+            apiKeyEnv:'LOCAL_KEY',
+            model:'my-model',
+        }
+        const cfg = normalize(
+            decode(starter(finder, verifier)), ''
+        )
+        t.equal(cfg.roles.finder!.profile,
+            'custom-finder')
+        t.equal(cfg.roles.verifier!.profile,
+            'custom-verifier')
+        const fp = cfg.inference_profiles['custom-finder']!
+        const vp = cfg.inference_profiles['custom-verifier']!
+        t.equal(fp.endpoint,
+            'http://openai.api.tiiny/v1')
+        t.equal(vp.endpoint,
+            'http://localhost:8080/v1')
+    })
+
+test('starter two identical custom roles share custom name',
+    t => {
+        const choice:CustomChoice = {
+            kind:'custom',
+            endpoint:'http://openai.api.tiiny/v1',
+            protocol:'chat',
+            apiKeyEnv:'TIINY_KEY',
+            model:'Qwen/Qwen3.6-35B-A3B',
+        }
+        const cfg = normalize(
+            decode(starter(choice, choice)), ''
+        )
+        t.equal(cfg.roles.finder!.profile, 'custom')
+        t.equal(cfg.roles.verifier!.profile, 'custom')
+        t.equal(
+            Object.keys(cfg.inference_profiles).length, 1
+        )
+    })
+
 test('starter comments agree with runtime defaults', t => {
-    const body = starter('', '')
+    const body = starterFromModels('', '')
     const comments = body.split('\n').filter(line =>
         /^ {2}\/\/ (?: *"| *})/.test(line))
         .map(line => line.slice(5)).join('\n')
