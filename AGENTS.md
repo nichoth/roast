@@ -45,9 +45,11 @@ here. This file holds only what most tasks hit.
 
 ## Traps every task hits
 
-- `npm run test:one` writes a shared bundle; run single-file suites
-  sequentially to avoid executing the wrong suite.
-
+- In-process review tests can replace `reviewHooks.sleep` to control
+  agent retry delays; restore it in `t.cleanup` to isolate later tests.
+- Focused test bundles live in `test/` so Node treats them as package
+  ESM and their relative paths match the full test bundle. Each run
+  owns its temporary file and removes it on exit.
 - `JSON.parse` syntax errors can quote the input. Credential-file parse
   errors must use value-free messages so diagnostic output cannot expose
   a stored key.
@@ -61,11 +63,16 @@ here. This file holds only what most tasks hit.
   credentials) chdir into a temporary Git repository first. `.roast/`
   ignores itself, so a leak into this checkout is invisible to
   `git status`; check with `ls -a`.
+- Git subprocess fixtures must isolate global and system Git config at
+  initialization as well as when invoking the runner. Register cleanup
+  before operations that can throw, including aborting spawned children.
 - CLI diagnostic tests that resolve roles need valid test credentials
   and local fake-server routing, even when asserting only local checks.
   Doctor fakes must route GET models checks and POST inference separately;
   a successful chat probe needs a lookup call followed by a final call
   that echoes the token from the replayed tool result.
+- Doctor probes use `doctorHooks.timeout` to create deadline signals;
+  tests that replace it must restore it in `t.cleanup`.
 - The CLI parser preserves dashed option names and disables boolean
   negation. Declare flags such as `no-browser` explicitly and read
   `args['no-browser']`, rather than a camel-case property.
@@ -92,7 +99,7 @@ here. This file holds only what most tasks hit.
 - User-facing docs (`README.md`, `docs/`, the bundled
   `src/skill/assets/roast/SKILL.md`) write every invocation as
   `npx roast ...`; Roast is a project dependency, never a `PATH` binary.
-  Settings are documented as `.roast.json` keys, never environment
+  Settings are documented as `.roast.jsonc` keys, never environment
   variables; only credentials, `ROAST_SKIP`, and test-only `ROAST_LIVE_*`
   / `ROAST_TEST_*` variables exist.
 - CLI messages in `src/cli/` (for example the gate hint printed

@@ -11,12 +11,12 @@ import { saveCredential } from '../../src/credentials/credentials.js'
 
 const STORED = 'sk-ant-stored-0123'
 
-// A temp repo whose .roast.json puts the finder on Anthropic's default
+// A temp repo whose .roast.jsonc puts the finder on Anthropic's default
 // endpoint and the verifier on a custom endpoint with its own variable.
 function storedRepo (t:CleanupTest) {
     const r = tempRepo()
     t.cleanup(r.remove)
-    fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
         version:1,
         inference_profiles:{
             claude:{ protocol:'anthropic', model:'claude-x' },

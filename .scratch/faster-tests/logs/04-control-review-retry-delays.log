@@ -1,0 +1,2816 @@
+Reading prompt from stdin...
+OpenAI Codex v0.172.0
+--------
+workdir: /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+model: gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: none
+session id: 01a215d9-48b9-7100-b9a8-8f510db2d891
+--------
+user
+---- SPEC CONTEXT ----
+# Make the test suite substantially faster
+
+**Status:** ready-for-agent
+
+## Problem Statement
+
+Developers wait too long for feedback from the test suite. A measured
+local run took 143.6 seconds for 974 test cases and 7,694 assertions.
+The suite runs cases serially, exercises many real Git repositories and
+subprocesses, and waits for production timeouts and retry backoff. Much
+of that coverage is useful, but elapsed time is not itself evidence of
+correct behavior.
+
+The full suite needs to remain a trustworthy release and CI gate while
+developers get substantially faster feedback. Fast focused checks should
+also remain available during development.
+
+## Solution
+
+Run independent test groups concurrently in isolated processes, and
+replace unnecessary real-time waits with controllable test dependencies.
+Preserve behavioral coverage, including representative real Git, gate,
+HTTP, timeout, cancellation, and subprocess integration tests.
+
+Keep the existing full-suite command and CI gate reliable. Measure the
+result against the current serial baseline on the same machine. Aim for
+at least a 50% reduction in full-suite wall time; report actual results
+and any machine or resource constraints rather than making a fragile
+timing assertion part of the ordinary test suite.
+
+## Implementation Decisions
+
+- Keep the TypeScript package and existing CI gate. The full test command
+  still builds the CLI before tests that execute it, runs the complete
+  non-live suite, and returns a nonzero status on failure.
+- Partition the suite into independent groups that execute in separate
+  Node processes with bounded concurrency. Preserve test discovery and
+  ensure every existing case is included exactly once. A group must not
+  mutate another group's bundle or other shared generated artifacts.
+- Provide readable results for each group, with failures, crashes,
+  incomplete output, and nonzero child exits reliably propagated. Avoid
+  interleaving that makes diagnostics impossible to associate with a
+  group. Preserve the test pipeline's existing failure semantics.
+- Make focused test invocations safe to run concurrently, including
+  independent temporary bundle paths and cleanup. Preserve their existing
+  command-line interface and nonzero failure behavior.
+- Prefer existing dependency injection for sleep and test fakes. Where
+  end-to-end orchestration lacks a suitable seam, add the smallest
+  practical seam at a high boundary. Preserve production retry delays,
+  timeout values, cancellation, and command behavior.
+- Replace avoidable real waits, especially the interrupted inference
+  stream's retry and the doctor timeout, with deterministic control over
+  the relevant delay or signal. Keep representative real-clock tests
+  where they prove integration with actual timers or subprocesses.
+- Investigate the slow gate and Git fixtures with measurements; reduce
+  redundant setup where isolation and behavior allow it. Do not remove a
+  distinct behavioral scenario solely to improve the timing.
+- Keep all tests isolated from user configuration, credentials, and the
+  checkout. Account for process-wide working directories, temporary Git
+  repositories, local HTTP listeners, and cleanup on failure.
+- Use bounded concurrency appropriate to available resources and expose a
+  way to reduce it for constrained or diagnostic environments.
+- Document the commands, worker control, focused-run guarantees, and
+  how to reproduce the timing comparison in contributor documentation.
+
+## Testing Decisions
+
+- A good test verifies observable behavior at the highest practical seam,
+  not private worker scheduling, a specific partition layout, or the
+  implementation of a test double.
+- Exercise the full test command with controlled fixture groups to prove
+  complete execution, isolation, attributable output, and failure
+  propagation for failed assertions, crashes, and incomplete output.
+  Existing test-pipeline command tests provide prior art.
+- Exercise simultaneous focused commands using distinct fixtures, and
+  verify that each reports its own result and exit status. Existing
+  focused-command tests provide prior art.
+- Exercise retry and timeout behavior at existing agent, CLI, and HTTP
+  seams with controlled delays. Verify retry requests, delay decisions,
+  cancellation, and resulting observable outcomes. Existing injected
+  sleep and local inference-server tests provide prior art.
+- Retain representative integration tests using actual Git, gate
+  subprocesses, HTTP, timers, and signals. Preserve assertions about
+  reviewed content, fail-open behavior, and cleanup.
+- Compare repeated full-suite wall times before and after on the same
+  machine and configuration. Report the worker count, test and assertion
+  totals, results, and any variance. Verify the complete CI gate and
+  repeat parallel runs to detect interference; timing is a benchmark,
+  not a hard-coded assertion in the normal test suite.
+
+## Out of Scope
+
+- Changing Roast's production retry, timeout, gate, or review semantics.
+- Deleting meaningful coverage or making live provider tests mandatory.
+- Rewriting the project in another language or replacing the package
+  architecture.
+- Guaranteeing an absolute runtime on every machine or claiming the full
+  integration suite will be instant.
+
+## Further Notes
+
+The baseline is from an instrumented test-bundle run, not a complete
+unmodified full-suite command. It passed all assertions. Re-establish a
+comparable uninstrumented baseline before implementing the change.
+Local HTTP listeners are required for integration tests. The first
+measurement attempt could not complete under a sandbox that denied them.
+
+
+---- TICKET ----
+04-control-review-retry-delays.md
+# 04: Control retry delays in review tests
+
+**Blocked by:** 01
+**Touches:** `test/cli/review-anthropic.ts`, `test/llm/agent-http.ts`,
+`src/llm/agent.ts`, `src/llm/client.ts`, `src/llm/retry.ts`,
+review orchestration and test helpers as needed
+**Status:** ready-for-agent
+
+**What to build:** Exercise the interrupted inference stream retry at a
+high practical seam without waiting for production backoff, preserving
+real request and retry behavior and production delay semantics.
+
+- [ ] The interrupted-stream scenario verifies retry requests and the
+  resulting behavior without a production-length sleep.
+- [ ] Controlled delay tests verify retry delay decisions and cancellation
+  at the relevant agent, CLI, or HTTP seam.
+- [ ] Representative real timer and HTTP integration coverage remains,
+  and production retry delays and command behavior are unchanged.
+
+
+These are records of earlier runs. The ticket or spec may have changed since then; where they disagree, follow the ticket and spec. Do not repeat an approach these notes say failed unless you can see why it failed.
+
+---- WHAT THE BLOCKING TICKETS DID ----
+## 2026-11-25 19:14 -- faster-tests/01 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Attempt notes
+
+- This is a measurement-only ticket; test-first adds no value for the
+  measurement and documentation checklist items.
+- The ticket requests repeated full-suite runs, but the agent instructions
+  permit npm test in full once, as the final gate. One run cannot establish
+  variance; leave the repeated-runs item incomplete.
+- No changes to the suite or CI commands are planned.
+- Recorded the one permitted run in .scratch/faster-tests/baseline.md:
+  149.57 seconds, 7,694 passing assertions, exit 0. The reporter does
+  not provide a test case total; the heading estimate is 972.
+- Local listeners succeeded. The baseline is incomplete until a second
+  successful run is recorded under the same configuration.
+- Lint passed with an existing deprecated ESLint option warning.
+- The suite and CI gate were left unchanged; only measurement
+  documentation was committed. No test-first cycle applies to this item.
+- The single npm test run passed; no additional full run was executed.
+
+---- AGENT INSTRUCTIONS ----
+You are an autonomous coding agent. Implement the ticket using /tdd.
+
+Follow these rules:
+- Read the files directly relevant to the ticket before writing code. Also read any AGENTS.md in or above the directories you will touch, plus CONTEXT.md and the relevant docs/adr/ entries if they exist. If they do not exist, proceed silently.
+- Work ONLY on this ticket. Do not fix unrelated problems you notice.
+- Do NOT research external APIs or services via web search. Use the spec and ticket body as your sole reference for API shapes.
+- Dependencies are already installed with `npm ci --prefer-offline --no-audit --no-fund`. Do NOT reinstall them with any other command; to reinstall, run that same command. To add a dependency, use the package manager that command uses, so its lockfile stays in sync.
+- Use /tdd for every checklist item. For each item, write a failing test at the seams named in the spec's Testing Decisions section, then write only enough code to make it pass, then refactor. For a checklist item that is pure scaffolding, config, or docs (where a test adds no value), skip test-first and record that decision in your notes file.
+- While iterating, run only the tests relevant to what you changed. Run `npm test` in full once, as the final gate before your last commit. Do not commit with failing tests. The orchestrator runs the same command after you exit and rejects the ticket if it fails.
+- If the project has a lint script, run it and fix what it reports.
+- INTEGRITY: never delete, skip, weaken, or write tautological tests to force a green result. Only report a checklist item done when its real tests genuinely pass. If an item cannot be completed honestly, leave it unchecked and record what blocked you in your notes file.
+- Do NOT read or modify files outside your current directory (the worktree).
+- Do NOT run git push.
+- Commit after each checklist item, and make sure everything is committed when finished, except your notes file.
+- Keep notes for this attempt in `.redeye/notes.md` (create the directory). Update it after each checklist item and as soon as you hit a blocker, not only at the end. Record what you implemented, files changed, how you read any vague acceptance criteria, what blocked you, and anything the next attempt at this ticket should know. Never commit, git add, or delete this file; the orchestrator collects it.
+- After completing each checklist item in the ticket, print a line: [x] <item text> (matching the checklist text exactly).
+- Before your final commit, record reusable learnings in the nearest AGENTS.md (in or above the directories you modified; prefer that over the repo root). Good additions: module conventions, gotchas, files that must change together, how to test that area, environment requirements. Do NOT add ticket-specific details or temporary debugging notes. Only write when you have knowledge that would help future work in that directory. Reusable patterns go in AGENTS.md; anything specific to this ticket goes in your notes file.
+
+hook: SessionStart
+hook: SessionStart Completed
+codex
+I’ll use the TDD workflow for this ticket, first tracing the review retry
+path and its existing tests, then adding controlled-delay coverage at the
+highest practical seam.
+exec
+/bin/zsh -lc "pwd && rg --files -g 'AGENTS.md' -g 'CONTEXT.md' -g 'docs/adr/**' -g 'docs/agents/**' -g '.agents/skills/tdd/**' && git status --short" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 106ms:
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+src/runbundle/AGENTS.md
+AGENTS.md
+CONTEXT.md
+src/review/AGENTS.md
+src/record/AGENTS.md
+docs/adr/0004-typescript-rewrite.md
+docs/adr/0003-trust-hash-v2.md
+docs/adr/0001-trusted-project-config.md
+docs/adr/0002-stored-credentials.md
+src/render/AGENTS.md
+docs/agents/records.md
+docs/agents/typescript.md
+docs/agents/issue-tracker.md
+docs/agents/llm.md
+docs/agents/skill.md
+docs/agents/triage-labels.md
+docs/agents/auth.md
+docs/agents/domain.md
+docs/agents/config.md
+docs/agents/scope-context.md
+docs/agents/trust.md
+docs/agents/gate.md
+
+exec
+/bin/zsh -lc 'cat .agents/skills/tdd/SKILL.md AGENTS.md CONTEXT.md docs/adr/0004-typescript-rewrite.md docs/agents/typescript.md docs/agents/llm.md src/review/AGENTS.md' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+---
+name: tdd
+description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
+---
+
+# Test-Driven Development
+
+TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after.
+
+When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
+
+## What a good test is
+
+Tests verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't. A good test reads like a specification: "user can checkout with valid cart" tells you exactly what capability exists, and it survives refactors because it doesn't care about internal structure.
+
+See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+
+## Seams: where tests go
+
+A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
+
+**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+
+Ask: "What's the public interface, and which seams should we test?"
+
+When the shape of that interface is itself in question (how deep the module is, where the seam belongs, what the interface should expose), call the Skill tool with "codebase-design" for the vocabulary. It is the shared source of the module, interface, depth, seam, adapter, leverage and locality terms, and it is a reference to consult, not a session to run.
+
+## Anti-patterns
+
+- **Implementation-coupled**: mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
+- **Tautological**: the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth: a known-good literal, a worked example, the spec.
+- **Horizontal slicing**: writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead: one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
+
+## Rules of the loop
+
+- **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
+- **One slice at a time.** One seam, one test, one minimal implementation per cycle.
+- **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout. See `docs/agents/domain.md`.
+
+## Layout
+
+Roast is one TypeScript package (ADR-0004): the CLI in `src/`, its
+tests in `test/`, Node-run tooling in `scripts/`. Do not add Go tools.
+The CI gate, in order:
+`npm run lint`, `npm run typecheck`, `npm test` (builds `dist/cli.js`,
+then runs the test bundle; it does not typecheck),
+`git diff --exit-code -- roast.schema.json`, `npm pack --dry-run`.
+
+## Area notes
+
+Before editing code in an area, read its notes.
+
+- Any code in `src/`, `test/`, or `scripts/`: `docs/agents/typescript.md`
+- Config loading, roles, providers, the `init` starter,
+  `roast.schema.json` (`src/config/`): `docs/agents/config.md`
+- Trust and approvals (`src/trust/`, `*/trust.ts`):
+  `docs/agents/trust.md`
+- Stored credentials, `login`, `logout` (`src/credentials/`,
+  `src/cli/*login*`, `src/cli/logout.ts`): `docs/agents/auth.md`
+- Gate and the pre-commit hook (`src/gate/`): `docs/agents/gate.md`
+- Agent skill install (`src/skill/`): `docs/agents/skill.md`
+- Run records, `runs`, `ignore` (`src/record/`, `src/cli/runs.ts`):
+  `docs/agents/records.md`
+- Scope, context, exploration tools, snapshot denylist (`src/scope/`,
+  `src/context/`, `src/snapshot/`): `docs/agents/scope-context.md`
+- LLM adapters and the agent loop (`src/llm/`): `docs/agents/llm.md`
+
+A new note goes in its area's file; a new area gets a file and a line
+here. This file holds only what most tasks hit.
+
+## Traps every task hits
+
+- `npm run test:one` writes a shared bundle; run single-file suites
+  sequentially to avoid executing the wrong suite.
+
+- `JSON.parse` syntax errors can quote the input. Credential-file parse
+  errors must use value-free messages so diagnostic output cannot expose
+  a stored key.
+- Shell hooks block Bash commands that contain a heredoc mentioning
+  `process.env.PATH`, a heredoc or command containing `env:` or `.env`
+  text, or a `credentials*` path together with `cat`, `sed`, `head`, and
+  the like. Read and write such files with the editor tools.
+- Review record initialization follows scope and prompt validation; early
+  failures can leave no record, while later failures can retain evidence.
+- Tests that write project state (run records, trust, stored
+  credentials) chdir into a temporary Git repository first. `.roast/`
+  ignores itself, so a leak into this checkout is invisible to
+  `git status`; check with `ls -a`.
+- CLI diagnostic tests that resolve roles need valid test credentials
+  and local fake-server routing, even when asserting only local checks.
+  Doctor fakes must route GET models checks and POST inference separately;
+  a successful chat probe needs a lookup call followed by a final call
+  that echoes the token from the replayed tool result.
+- The CLI parser preserves dashed option names and disables boolean
+  negation. Declare flags such as `no-browser` explicitly and read
+  `args['no-browser']`, rather than a camel-case property.
+- `init` login-offer tests that use `simulateTerminals(t, true)` must
+  pass `--finder-model` and `--verifier-model` flags, otherwise
+  interactive prompts consume stdin before the login offers see it.
+- `simulateTerminals` only bypasses interactive-terminal detection. To
+  exercise raw-mode prompt input through the CLI, give stdin an `isTTY`
+  value of `true` and a `setRawMode` function; assert raw mode is restored.
+- Browser-login tests send callbacks with the real fetch; the injected
+  provider fetch rewrites every origin. Bound callback tests with
+  `loginTimeouts.browser` and set injected display variables on Linux.
+- After editing the bundled Roast skill, run `npm run test:one --
+  test/skill/assets.ts` to check that bundled bytes match the source.
+- Starter comments and runtime config/gate settings share defaults in
+  `src/config/defaults.ts`. Review flag defaults should use that module
+  too, so starter guidance stays aligned with runtime behavior.
+- Login orchestration shares `ctx.lines` across providers and prompts.
+  Reuse `providersNeedingLogin` and `loginProvider` for login offers;
+  `loginPath` owns the scope rules shared by login and logout.
+
+## Docs
+
+- User-facing docs (`README.md`, `docs/`, the bundled
+  `src/skill/assets/roast/SKILL.md`) write every invocation as
+  `npx roast ...`; Roast is a project dependency, never a `PATH` binary.
+  Settings are documented as `.roast.jsonc` keys, never environment
+  variables; only credentials, `ROAST_SKIP`, and test-only `ROAST_LIVE_*`
+  / `ROAST_TEST_*` variables exist.
+- CLI messages in `src/cli/` (for example the gate hint printed
+  during review) still say bare `roast`; changing them is a code change,
+  not a docs change.
+- Run records can retain arbitrary sensitive content. Metadata excludes
+  resolved authentication material and response capture omits HTTP headers,
+  but neither is comprehensive redaction of artifact content.
+# Roast
+
+An adversarial, cross-model code reviewer installed as a project dependency
+via npm. One model proposes defects in a Git diff and a second model checks
+surviving candidates when verification runs.
+
+## Language
+
+### Review
+
+**Finder**:
+The role whose model reads the diff and proposes candidate findings.
+_Avoid_: reviewer, author model
+
+**Verifier**:
+The role whose model checks candidate findings against the cited code. It
+can confirm, refute, or report insufficient context for a finding.
+_Avoid_: checker, judge
+
+**Role**:
+One of the two review positions, finder or verifier, each bound to one
+inference profile.
+
+**Inference profile**:
+A named, complete unit of model, endpoint, protocol, output limit and
+credential source.
+_Avoid_: provider, backend
+
+**Run record**:
+The stored evidence of one review, kept inside the project that was reviewed.
+It can contain sensitive reviewed content, prompts, arguments, and provider
+responses; excluding resolved authentication material from dedicated metadata
+does not make the recorded content credential-free.
+_Avoid_: log, history
+
+**Gate**:
+The pre-commit hook that runs a quick review of staged content and fails open.
+_Avoid_: pre-commit check, hook
+
+### Configuration
+
+**Project config**:
+The `.roast.jsonc` file (JSONC) nearest the working directory, searched upward
+no further than the Git toplevel. It is the single home for every non-secret
+setting.
+_Avoid_: repo config, local config, rc file
+
+**Trusted project config**:
+A project config whose security-relevant contents (non-default endpoints,
+credential variable names, prompt-override files) the user has explicitly
+approved for this clone. Roast does not send code or credentials anywhere a
+project config names until it is trusted.
+_Avoid_: allowed config, whitelisted config
+
+**Credential**:
+An API key. Credentials are the only settings that come from outside the
+project config: from environment variables, or from a stored credential. A
+project config may name the variable but never hold the value.
+_Avoid_: secret, token
+
+**Built-in provider**:
+A provider Roast knows by name (OpenAI, Anthropic, OpenRouter): its
+endpoint, the protocols it accepts there, its standard key variable, and
+how to log in.
+A selected profile on a built-in provider's endpoint with an accepted
+protocol and its standard or implicit key variable requires no approval on
+its own; other selected profiles and prompt overrides also matter.
+_Avoid_: default provider, known provider
+
+**Stored credential**:
+A built-in provider's key kept in a credentials file, scoped to the project
+(inside the Git directory) or to the user. It ranks below every environment
+variable and is sent only to that provider's own endpoint (ADR-0002).
+_Avoid_: saved key, cached token
+---
+status: proposed
+---
+
+# Roast is a TypeScript package that talks to providers over raw fetch
+
+Roast was a Go binary shipped through npm as six platform packages and a
+launcher. Every Roast install is already a Node project dependency, so a Go
+toolchain, per-platform builds, and the launcher add release machinery
+without serving users. We rewrite Roast in TypeScript as one pure-JS npm
+package, `2.0.0`, with behavior parity against Go commit `cd08f10` except
+for named changes: no Windows support, no `completion` command, Node
+`>=22.18`, and the trust hash in ADR-0003.
+
+Runtime libraries (`yargs`, `zod`, `jsonc-parser`,
+`@substrate-system/debug`) are bundled into one esbuild ESM file, so
+installing Roast adds no transitive packages to a user's project, the same
+property the Go binary had. Their license texts ship in a generated
+third-party notice.
+
+Inference uses raw `fetch` with one adapter per protocol (`chat`,
+`responses`, `anthropic`) and Roast's own agent loop, not a provider SDK
+or an LLM framework. The Go version used the Fantasy framework but had to
+wrap or override much of it: it captured raw response bytes for run
+records, removed headers the SDKs read from ambient environment variables,
+replaced retry and tool-call-repair behavior, sized requests for the token
+ledger before sending, and reserved a wrap-up turn. Official SDKs would need
+the same overrides on two codebases; owning the wire layer puts all of it in
+one place.
+
+## Considered options
+
+- Keep Go: no rewrite cost, but keeps the multi-package release and a second
+  toolchain for a tool whose users all run Node.
+- Official `openai` and `@anthropic-ai/sdk` SDKs: typed streaming for free,
+  but both read ambient configuration and run their own retries, which Roast
+  must defeat to keep its credential and capture guarantees.
+- Vercel AI SDK: closest to Fantasy, but it hides the request bytes and the
+  retry policy that the ledger and run records depend on.
+# TypeScript
+
+Applies to `src/`, `test/`, and `scripts/`. Notes for one area are in
+that area's file (index in `AGENTS.md`).
+
+## Tooling
+
+- `npm test` builds `dist/cli.js`, then bundles and runs the tapzero
+  suite; it does not typecheck. A new test module must be imported from
+  `test/index.ts`. esbuild drops unused imports without resolving them,
+  so only `npm run typecheck` catches a broken import.
+- `npm run test:one -- test/<area>/<file>.ts` bundles one test module
+  to `test/one-bundle.js` and runs it through tap-spec. Test modules
+  cannot run directly under Node: their `.js` import specifiers only
+  resolve once bundled. It does not typecheck; run `typecheck` too.
+- Lint with `npm run lint`: it preloads `scripts/eslint-ts6.ts`, which
+  gives eslint the TypeScript 6 API because typescript-eslint throws on
+  the TypeScript 7 that `typecheck` uses.
+- Node runs `scripts/` directly (type stripping), so they use only
+  erasable syntax: no enums, namespaces, or parameter properties.
+- `baseOptions` in `scripts/esbuild-options.ts` holds the esbuild
+  options every bundle shares (text loaders for `.tmpl`, `.md`, `.sh`;
+  `mainFields: ['module', 'main']`, which `jsonc-parser`'s UMD build
+  needs); `scripts/bundle.ts` adds the `require` shim banner. A test
+  that bundles code itself uses both.
+- `npm run build` also writes `dist/THIRD_PARTY_LICENSES.txt`
+  (`scripts/licenses.ts`) and fails, naming the package, when a bundled
+  package lacks an allowlisted `license` field or a license file. A new
+  runtime library must pass it; extending `ALLOWED_LICENSES` needs
+  maintainer approval. `@substrate-system/debug` fails it today, so no
+  `src/` module may import it yet. Runtime libraries are
+  `devDependencies` (bundled); `dependencies` stays empty.
+
+## Source conventions
+
+- Keep source ASCII: write `\uXXXX` escapes. Some editing tools decode
+  escapes into literal characters when writing; check with
+  `grep -nP '[^\x00-\x7f]'` after writing a file. eslint `--fix`
+  (quote-props) rewrites a quoted `'\u00e9'` object key into a literal
+  non-ASCII identifier; put such keys in a const and use a computed key.
+- eslint rejects control characters in regex literals
+  (`no-control-regex`) and labeled statements (`no-labels`); scan char
+  codes and use helper functions instead.
+- Startup guards live in `src/startup.ts`, not `src/cli.ts`: importing
+  the entry runs the CLI, so testable helpers sit in other modules.
+- Module-level swappable functions use a mutable hooks object plus a
+  delegating export (`terminalHooks`, `skillHooks.lookPath`), because
+  tests cannot reassign an ESM `let` export. Swap the object's field
+  and restore it in `t.cleanup`.
+- Shared helpers; import these, never re-implement:
+  `src/gocompat/` (`strings.ts`: Go TrimSpace/Ext/`%.2f`/strconv.Quote/
+  byte-order sort and `truncateUtf8`; `duration.ts`: Go durations as
+  bigint nanoseconds; `match.ts`: Go `path.Match`),
+  `src/textsafe/textsafe.ts`, `src/fsutil/atomic.ts`
+  (`writeFileAtomic`, options cover trust, credentials, and gate temp
+  names and error messages), `src/git/git.ts` (the only git runner;
+  pass the CLI context's `env`, it reads `process.env` only when none is
+  given), `src/util/pool.ts` (`mapPool`).
+
+## CLI core (`src/cli/`)
+
+- Commands are `CommandDef`s (`command.ts`) listed in `commands.ts`;
+  `run.ts` builds the yargs tree from that list plus `registerCommand`
+  (tests), and calls the handler only after parsing succeeds.
+- A handler gets a `RunContext` (cwd, env, signal, fetch, one shared
+  `LineReader`) and throws `UsageError` / `ExitSignal` / any error; it
+  never writes the error itself or reads process globals.
+- A group with `subcommands` and no handler prints its help.
+- yargs number parsing is off (`parse-numbers: false`). Declare an
+  integer flag as `type:'string'` and parse decimal digits in the
+  handler, throwing `UsageError` on a bad value (see `parseLimit` in
+  `runs.ts`).
+- Terminal detection and browser opening are swapped through
+  `terminalHooks` (`terminal.ts`).
+- With only the default `$0` command registered, yargs omits the
+  Commands section from root help; it appears once a second command
+  registers.
+
+## Review command (`src/cli/review.ts`)
+
+- End-to-end review tests use `settingsRepo` (`test/helpers/review.ts`):
+  a temp repo with an uncommitted change, a config on a fake `chat`
+  server, keys in env, `review.snapshot: false`, and approval via
+  `roast trust --yes`. It chdirs into the repo.
+- yargs keeps only the last occurrence of an array flag under
+  `duplicate-arguments-array: false`; review slice flags are re-read
+  from `ctx.argv` (`review-flags.ts`). Flags whose "changed" state
+  matters have no yargs default (`undefined` = not given).
+- The structured finder call offers `findings` plus the agent's
+  `__roast_continue`; assert tool presence, not exact lists.
+- Verification (step 17) runs only with `doVerify` and at least one
+  finding. `verify` (`src/verify/verify.ts`) never throws; an abort
+  becomes undecided verdicts, so the run still writes its record and
+  exits 4. Its result types `notes` as `string[]|null` (Go parity), so
+  CLI code after step 17 takes `VerifiedResult`, not `Result`.
+- Verifier CLI tests (`test/cli/review-verify.ts`) put the verifier on
+  its own profile and model and tell its requests apart by the
+  `submit_verdict` tool. The default role key variable
+  (`ROAST_VERIFIER_API_KEY`) backs any profile, so an invalid-key test
+  must delete it from the env.
+- The entry exits within the tick of the first SIGINT, and identical
+  signals sent back to back coalesce, so a second-signal test needs a
+  slow wind-down (a fake `git` that exits slowly on SIGTERM).
+
+## Tests
+
+- Use the `test` wrapper in `test/helpers/test.ts`, which adds Go-style
+  `t.cleanup` (tapzero has no teardown hook). tapzero's `Test` has no
+  `notOk`; write `t.ok(!x, ...)`.
+- CLI tests run in-process with `runRoast` (`test/helpers/run.ts`),
+  which makes a temp repo with an isolated env (`test/helpers/repo.ts`:
+  `tempRepo`, `tempDir`, which also sets `GIT_CEILING_DIRECTORIES`).
+  `test/cli/process.ts` and `test/tooling/bundle.ts` spawn `dist/cli.js`,
+  so they need a fresh `npm run build` (`npm test` does that).
+- Test environments come from `isolatedEnv`, which starts from
+  `cleanEnv(process.env)` (`test/helpers/env.ts`): every `ROAST_*`,
+  `OPENAI_*`, `OPENROUTER_*`, and `ANTHROPIC_*` variable is stripped. A
+  new provider whose key variable has another prefix goes in its
+  `AMBIENT_PREFIXES`. Tests set credentials in `io.env`, never in
+  `process.env`.
+- A review test needs an approved `.roast.jsonc` on the fake server:
+  `settingsRepo` approves, or call `approveProjectConfig`. A test
+  asserting a config error approves a valid config and then edits it,
+  so a trust failure cannot mask the error. A doctor test that probes a
+  custom endpoint approves in its temp repo (`approveDoctorConfig`,
+  `test/cli/doctor.ts`), never in this checkout.
+- Untracked files are part of a review's diff, so a test that checks
+  which file's text reached the fake server keeps decoys out of scope
+  (for example through `.git/info/exclude`).
+- Fakes: `startInferenceServer` (`test/helpers/inference-server.ts`)
+  speaks the three protocols; `providerServer`
+  (`test/helpers/provider-server.ts`) adds key-check and OpenRouter
+  routes. `runRoast({ redirectTo })` uses `redirectingFetch`, so a
+  profile on a built-in endpoint reaches the fake. `requestRecorder` and
+  `reviewMeta` (`test/helpers/review.ts`) read what the fake received
+  and the run's `meta.json`.
+- Swap terminals and the browser with `simulateTerminals` /
+  `captureBrowser` (`test/helpers/terminal.ts`).
+- Tests that spawn processes use `test/helpers/spawn.ts` (`ROOT`,
+  `run`).
+- Git runner tests observe a child by putting a fake `git` shell script
+  first on the injected `PATH` (spawn resolves the command through
+  `env.PATH`); see `test/git/git.ts`.
+- Live tests live under `test/live/` (entry `index.ts`,
+  `npm run test:live`); each passes with a "skipped" note when its
+  `ROAST_LIVE_*` key is unset, so the TAP stream is never empty.
+# LLM layer and agent loop (TS)
+
+`src/llm/`.
+
+## Adapters
+
+- Adapters read no environment variable. A protocol is an entry in
+  `ADAPTERS` (`client.ts`) with a pure encoder and an
+  `AsyncIterable<SseEvent>` decoder returning a `ModelTurn`; `send` owns
+  fetch, headers (`http.ts` `requestHeaders`), capture, usage, and
+  abort.
+- One `errors.ts`: `LlmError.kind` (underscore names, read by
+  `src/cli/errors.ts`) and `sentinels` (hyphen names, `hasSentinel`)
+  must stay in step.
+- Tool results sent to models go through `encodeToolResult` (`json.ts`)
+  only.
+- `anthropic` (`anthropic.ts`) groups items into alternating role
+  messages first, then drops a thinking-only assistant message; it never
+  edits, reorders, or drops a signed block. `tool_choice` matches Go
+  (`{type: auto, disable_parallel_tool_use: false}`).
+- Usage stage 1 lives in `usage.ts` per protocol (`chatUsage`,
+  `responsesUsage`, `anthropicUsage`); decoders call `normalizeUsage`
+  on its result.
+- Making an adapter available changes tests that pin unavailability:
+  the construction test in `test/llm/client.ts` and the doctor roundtrip
+  test (`test/cli/doctor.ts`, whose `doctorProbe` must speak the
+  protocol).
+
+## Agent loop (`agent.ts`, `runConversation`)
+
+- `createClient(modelClient, {ledger, now, sleep, sessionId})`
+  (`client.ts`) wraps a `ModelClient` into the finder/verifier `Client`.
+  The pure decision is `reviewResponse` (`review.ts`); the deadline,
+  ledger, final-argument validation, and retries are separate modules.
+- `ModelClient.send` owns the request timeout; the loop composes only
+  caller + deadline/window signals.
+- Cutoff errors come from `cutoffError` (`errors.ts`), which keeps the
+  cause out of the matchable chain; tests assert `details.stopCause`
+  kinds, never message text.
+
+## Tests
+
+- `test/helpers/inference-server.ts` (`startInferenceServer`: a script
+  picks a reply per request; it records method, path, headers, raw and
+  parsed body) and `inference-stream.ts` (`writeInferenceStream`, the
+  native SSE per protocol). The `responses` writer, like Go's, emits
+  every output item as a function call, so message items yield no text.
+- `test/helpers/anthropic-fakes.ts`: `anthropicCalls` (a Messages
+  response), `startBindingServer` (rejects a signed thinking block whose
+  prefix changed; counts `rejected`), and `deepSeekScript` /
+  `startDeepSeekServer` (400 on a forced tool choice or a missing
+  reasoning replay). `deepSeekScript` plugs into `settingsRepo`, whose
+  fetch rewrites every origin to its own server.
+- A fake that answers a different protocol than the request path makes
+  the client see an incomplete stream and retry with the 5 s backoff;
+  branch on `req.path` when one script serves two protocols.
+- CLI review tests on `responses` use `responsesProfileConfig`,
+  `responsesFindingsReply`, and `responsesCalls` (`test/helpers/review.ts`).
+  Requests through `runRoast`'s rewriting fetch carry
+  `transfer-encoding`; filter it with the other transport headers.
+- Byte-level body behavior (read-ahead, caps, cancel counts) is tested
+  with a `highWaterMark: 0` `ReadableStream` returned through
+  `ClientConfig.fetch`; `new Response(stream)` neither copies nor
+  pre-reads it.
+- Agent-loop tests drive `harness(script)` from
+  `test/llm/agent-helpers.ts` (a scripted fake `ModelClient`: canned
+  turns, errors, or functions of the request; sleeps recorded).
+- `AbortSignal.timeout` timers do not keep Node alive, so a fake step
+  that waits for an abort must hold a timer (the `aborted()` helper
+  does); otherwise the test process just exits.
+# Review model and finder
+
+- `Finding` uses wire field names; empty `lines` becomes `null` through
+  `toFinding`. Keep the ten wire fields in their schema declaration order.
+- `Result` uses internal `dropped` and `stopReason` names. Report rendering
+  owns the output names `dropped_findings` and `stop_reason`.
+- Final decoders receive both a parsed value and optional raw argument
+  text from `FinalSpec.decode`. Pass the raw text to the finding decoder
+  to distinguish integer literals from decimal or exponent spellings.
+  Early reports first round-trip the agent's float64 map through
+  `encodeToolResult`; their integer spelling rules therefore differ.
+- Fingerprints are similarity keys, never ids. Accumulation replaces
+  content on a repeated fingerprint while preserving first-seen order.
+  Capture runs on every accepted add, including submission merges.
+- Finder unit tests live in `test/review/`; scripted client tests reuse
+  `test/llm/agent-helpers.ts`, and HTTP tests use the inference server.
+  Import new test modules from `test/index.ts`.
+
+exec
+/bin/zsh -lc "rg -n 'interrupt|sleep|retry|createClient|RunContext' test/cli/review-anthropic.ts test/llm/agent-http.ts src/llm/{agent,client,retry}.ts src/cli test/helpers/{run,review}.ts" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 6ms:
+src/llm/retry.ts:1:// Step retries (spec 07, 2.11): a turn's request is retried on retryable
+src/llm/retry.ts:4:import { isRetryable, retryDelayMs } from './errors.js'
+src/llm/retry.ts:29:export function retryDelay (err:unknown, backoffMs:number):number {
+src/llm/retry.ts:30:    return retryDelayMs(err, backoffMs)
+src/llm/retry.ts:33:// Runs `attempt`, retrying a retryable failure up to `maxRetries` times
+src/llm/retry.ts:37:    opts:{ maxRetries:number, signal:AbortSignal, sleep?:Sleep }
+src/llm/retry.ts:39:    const sleep = opts.sleep ?? defaultSleep
+src/llm/retry.ts:49:            await sleep(retryDelay(err, backoff), opts.signal)
+test/llm/agent-http.ts:10:import { createClient, createModelClient } from '../../src/llm/client.js'
+test/llm/agent-http.ts:72:    return createClient(createModelClient(cfg(url, over)), {
+test/llm/agent-http.ts:73:        sleep:async () => {},
+test/llm/agent-http.ts:155:    t.equal(s.requests.length, 4, 'retry, correction, and a second run')
+test/cli/review-anthropic.ts:264:test('an interrupted anthropic stream is retried; its tool never runs',
+test/cli/review-anthropic.ts:288:            'the retry resends the same request')
+src/llm/agent.ts:24:import { withStepRetry, type Sleep } from './retry.js'
+src/llm/agent.ts:76:    sleep?:Sleep;
+src/llm/agent.ts:169:                    sleep:this.deps.sleep,
+src/llm/client.ts:31:import type { Sleep } from './retry.js'
+src/llm/client.ts:292:    sleep?:Sleep;
+src/llm/client.ts:309:export function createClient (
+src/llm/client.ts:324:        sleep:opts.sleep,
+src/cli/skill.ts:12:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/skill.ts:21:    ctx:RunContext
+src/cli/skill.ts:51:    ctx:RunContext
+src/cli/skill.ts:79:    ctx:RunContext
+src/cli/config.ts:11:import type { RunContext } from './command.js'
+src/cli/config.ts:21:type ConfigContext = Pick<RunContext, 'cwd'|'env'|'signal'>
+src/cli/ignore.ts:7:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/ignore.ts:70:    ctx:RunContext
+src/cli/gate.ts:8:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/gate.ts:23:    ctx:RunContext
+src/cli/gate.ts:45:async function repoRoot (ctx:RunContext):Promise<string> {
+src/cli/gate.ts:62:    ctx:RunContext
+src/cli/gate.ts:94:    ctx:RunContext
+src/cli/gate.ts:110:    ctx:RunContext
+src/cli/runs.ts:16:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/runs.ts:136:    ctx:RunContext
+src/cli/runs.ts:169:    ctx:RunContext
+src/cli/runs.ts:202:    ctx:RunContext
+src/cli/runs.ts:272:    ctx:RunContext
+src/cli/run.ts:11:    type RunContext,
+src/cli/run.ts:212:        const ctx:RunContext = {
+src/cli/login.ts:23:import type { CommandDef, RunContext } from './command.js'
+src/cli/login.ts:28:export type LoginContext = Pick<RunContext,
+src/cli/gate-offer.ts:9:import type { RunContext } from './command.js'
+src/cli/gate-offer.ts:20:    ctx:RunContext
+src/cli/gate-offer.ts:36:export async function maybeBootstrapGate (ctx:RunContext):Promise<void> {
+src/cli/doctor.ts:6:import { createClient, createModelClient } from '../llm/client.js'
+src/cli/doctor.ts:30:import type { CommandDef, RunContext } from './command.js'
+src/cli/doctor.ts:46:    ctx:RunContext
+src/cli/doctor.ts:120:    ctx:RunContext
+src/cli/doctor.ts:174:    ctx:RunContext
+src/cli/doctor.ts:189:        const client = createClient(createModelClient({
+src/cli/doctor.ts:263:    ctx:RunContext
+src/cli/doctor.ts:307:    ctx:RunContext
+src/cli/trust.ts:16:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/trust.ts:34:export type TrustIo = Pick<RunContext,
+src/cli/trust.ts:97:    ctx:RunContext
+src/cli/command.ts:10:export interface RunContext {
+src/cli/command.ts:42:    handler?:(args:CommandArgs, ctx:RunContext) => void|Promise<void>;
+src/cli/init.ts:16:import type { CommandDef, RunContext } from './command.js'
+src/cli/init.ts:35:    file:string, ctx:RunContext
+src/cli/init.ts:310:    file:string, repo:string, ctx:RunContext
+src/cli/review.ts:36:import { createClient, createModelClient } from '../llm/client.js'
+src/cli/review.ts:72:import type { CommandArgs, CommandDef, RunContext } from './command.js'
+src/cli/review.ts:106:    snapshot:((ctx:RunContext) => SnapshotDeps)|null;
+src/cli/review.ts:181:    return createClient(createModelClient(config), { ledger })
+src/cli/review.ts:186:function streams (ctx:RunContext):{ stdout:Writable, stderr:Writable } {
+src/cli/review.ts:212:    ctx:RunContext
+src/cli/review.ts:232:    ctx:RunContext
+src/cli/review.ts:594:    ctx:RunContext
+src/cli/review.ts:730:async function insideRepository (ctx:RunContext):Promise<boolean> {
+src/cli/review.ts:745:    ctx:RunContext
+
+exec
+/bin/zsh -lc 'cat src/llm/retry.ts test/llm/agent-http.ts test/cli/review-anthropic.ts src/cli/command.ts test/helpers/run.ts' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+// Step retries (spec 07, 2.11): a turn's request is retried on retryable
+// errors, never on aborts, capture failures, or cutoff errors.
+
+import { isRetryable, retryDelayMs } from './errors.js'
+
+export const INITIAL_BACKOFF_MS = 5000
+
+export type Sleep = (ms:number, signal:AbortSignal) => Promise<void>
+
+export function defaultSleep (ms:number, signal:AbortSignal):Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+            reject(signal.reason)
+            return
+        }
+        const onAbort = () => {
+            clearTimeout(timer)
+            reject(signal.reason)
+        }
+        const timer = setTimeout(() => {
+            signal.removeEventListener('abort', onAbort)
+            resolve()
+        }, ms)
+        signal.addEventListener('abort', onAbort, { once:true })
+    })
+}
+
+// The delay before the next attempt: the provider's hint, else backoff.
+export function retryDelay (err:unknown, backoffMs:number):number {
+    return retryDelayMs(err, backoffMs)
+}
+
+// Runs `attempt`, retrying a retryable failure up to `maxRetries` times
+// with doubling backoff. The last attempt's error is thrown.
+export async function withStepRetry<R> (
+    attempt:() => Promise<R>,
+    opts:{ maxRetries:number, signal:AbortSignal, sleep?:Sleep }
+):Promise<R> {
+    const sleep = opts.sleep ?? defaultSleep
+    let backoff = INITIAL_BACKOFF_MS
+    for (let retries = 0; ; retries++) {
+        try {
+            return await attempt()
+        } catch (err) {
+            if (opts.signal.aborted || retries >= opts.maxRetries ||
+                !isRetryable(err)) {
+                throw err
+            }
+            await sleep(retryDelay(err, backoff), opts.signal)
+            backoff *= 2
+        }
+    }
+}
+// The agent loop over the real `chat` adapter against the fake inference
+// server (spec 07, 5.2, 5.5, and 5.6 [HTTP] items).
+import type { ServerResponse } from 'node:http'
+import { test, type CleanupTest } from '../helpers/test.js'
+import {
+    startInferenceServer,
+    type InferenceServer,
+    type Script,
+} from '../helpers/inference-server.js'
+import { createClient, createModelClient } from '../../src/llm/client.js'
+import type { LlmError } from '../../src/llm/errors.js'
+import { hasSentinel } from '../../src/llm/errors.js'
+import type { ClientConfig } from '../../src/llm/types.js'
+import {
+    failure,
+    finalTool,
+    options,
+    readTool,
+    signal,
+} from './agent-helpers.js'
+
+async function server (t:CleanupTest, script:Script):Promise<InferenceServer> {
+    const s = await startInferenceServer(script)
+    t.cleanup(() => s.close())
+    return s
+}
+
+function cfg (url:string, over:Partial<ClientConfig> = {}):ClientConfig {
+    return {
+        role:'finder',
+        baseUrl:`${url}/v1`,
+        apiKey:'sk-test',
+        model:'deepseek-chat',
+        protocol:'chat',
+        maxOutputTokens:4096,
+        maxAttempts:0,
+        requestTimeoutMs:0,
+        ...over,
+    }
+}
+
+const USAGE = { prompt_tokens:10, completion_tokens:2, total_tokens:12 }
+
+function response (
+    message:Record<string, unknown>,
+    finish:string,
+    usage:unknown = USAGE
+) {
+    return {
+        id:'c1',
+        model:'m',
+        choices:[{
+            index:0,
+            message:{ role:'assistant', ...message },
+            finish_reason:finish,
+        }],
+        usage,
+    }
+}
+
+function toolCall (name:string, args:unknown, id = 'call-1') {
+    return response({
+        tool_calls:[{
+            id,
+            type:'function',
+            function:{ name, arguments:JSON.stringify(args) },
+        }],
+    }, 'tool_calls')
+}
+
+function client (url:string, over:Partial<ClientConfig> = {}) {
+    return createClient(createModelClient(cfg(url, over)), {
+        sleep:async () => {},
+    })
+}
+
+test('http: usage normalization through Client.usage()', async t => {
+    const s = await server(t, () => ({
+        stream:{
+            ...toolCall('submit', { summary:'ok' }),
+            usage:{
+                prompt_tokens:8,
+                prompt_tokens_details:{ cached_tokens:4 },
+                completion_tokens:3,
+                total_tokens:11,
+            },
+        },
+    }))
+    const c = client(s.url)
+    await c.converse('sys', 'user', options([finalTool()], { maxTurns:1 }),
+        signal())
+    t.deepEqual(c.usage(), {
+        uncached_input_tokens:4,
+        cached_input_tokens:4,
+        cache_write_tokens:0,
+        output_tokens:3,
+        calls:1,
+    }, 'disjoint counts, cached subtracted once')
+})
+
+test('http: a truncated response names finish reason length', async t => {
+    const s = await server(t, () => ({
+        stream:response({ content:'partial' }, 'length'),
+    }))
+    const err = await failure(client(s.url).converse('sys', 'user',
+        options([readTool(), finalTool()]), signal()))
+    t.ok(hasSentinel(err, 'no-final-call'), 'no-final-call')
+    t.equal((err as LlmError).details.finishReason, 'length',
+        'details name finish reason length')
+    t.equal((err as LlmError).details.stopCause, 'finish-reason',
+        'stopped on the finish reason')
+    t.equal(s.requests.length, 1, 'not retried')
+})
+
+test('http: prose names the model and the attempt count', async t => {
+    const s = await server(t, () => ({
+        stream:response({ content:'looks fine' }, 'stop'),
+    }))
+    const err = await failure(client(s.url, { maxAttempts:2 }).converse(
+        'sys', 'user', options([readTool(), finalTool()], { maxTurns:1 }),
+        signal()))
+    const details = (err as LlmError).details
+    t.ok(hasSentinel(err, 'no-final-call'), 'no-final-call')
+    t.equal(details.model, 'deepseek-chat', 'names the model')
+    t.equal(details.submissionAttempts, 2, 'names the attempt count')
+    t.equal(details.stopCause, 'answered-without-final', 'prose')
+})
+
+test('http: a reasoning-only length finish is a no-submission error',
+    async t => {
+        const s = await server(t, () => ({
+            stream:response({ reasoning_content:'thinking hard' }, 'length'),
+        }))
+        const err = await failure(client(s.url, { maxAttempts:3 }).converse(
+            'sys', 'user', options([readTool(), finalTool()]), signal()))
+        t.ok(hasSentinel(err, 'no-final-call'), 'no-final-call')
+        t.ok(!hasSentinel(err, 'endpoint'), 'not endpoint')
+        t.equal((err as LlmError).details.finishReason, 'length',
+            'names the ceiling')
+        t.equal(s.requests.length, 1, 'one request')
+    })
+
+test('http: one session ID per conversation', async t => {
+    const s = await server(t, (req, n) => {
+        if (n === 0) return { status:503, body:'{"error":{"message":"busy"}}' }
+        if (n === 1) return { stream:toolCall('submit', { summary:5 }) }
+        return { stream:toolCall('submit', { summary:'ok' }) }
+    })
+    const c = client(s.url, { model:'deepseek-reasoner' })
+    await c.converse('sys', 'user', options([readTool(), finalTool()],
+        { maxTurns:1 }), signal())
+    await c.converse('sys', 'user', options([readTool(), finalTool()],
+        { maxTurns:1 }), signal())
+    const ids = s.requests.map(r => r.headers['x-agent-session-id'])
+    t.equal(s.requests.length, 4, 'retry, correction, and a second run')
+    t.ok(typeof ids[0] === 'string' && ids[0].startsWith('roast-'),
+        'a roast session ID')
+    t.ok(ids[0] === ids[1] && ids[1] === ids[2],
+        'shared by requests, retries, and corrections')
+    t.ok(ids[3] !== ids[0], 'distinct across conversations')
+    for (const r of s.requests.slice(1)) {
+        t.equal((r.body as Record<string, unknown>).tool_choice, 'auto',
+            'thinking-mode model gets automatic tool choice')
+    }
+})
+
+test('http: a call buffered before a request timeout is never run',
+    async t => {
+        const read = readTool()
+        const s = await server(t, () => (res:ServerResponse) => {
+            res.writeHead(200, { 'Content-Type':'text/event-stream' })
+            const chunk = {
+                id:'c1',
+                object:'chat.completion.chunk',
+                created:1,
+                model:'m',
+                choices:[{
+                    index:0,
+                    delta:{
+                        tool_calls:[{
+                            index:0,
+                            id:'call-1',
+                            type:'function',
+                            function:{
+                                name:'read',
+                                arguments:'{"path":"a"}',
+                            },
+                        }],
+                    },
+                    finish_reason:null,
+                }],
+            }
+            res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+            // The stream never finishes.
+        })
+        const started = Date.now()
+        const err = await failure(client(s.url, {
+            requestTimeoutMs:200,
+            maxAttempts:3,
+        }).converse('sys', 'user', options([read, finalTool()]), signal()))
+        t.ok(hasSentinel(err, 'endpoint'), 'endpoint')
+        t.equal(s.requests.length, 1, 'after one call')
+        t.equal(read.runs, 0, 'the buffered call never ran')
+        t.ok(Date.now() - started < 5000, 'promptly')
+    })
+// `roast review` on an `anthropic` profile against the fake inference
+// server (spec 06, 5; ticket 28).
+import fs from 'node:fs'
+import path from 'node:path'
+import { test, type CleanupTest } from '../helpers/test.js'
+import type {
+    RecordedRequest,
+    Script,
+} from '../helpers/inference-server.js'
+import {
+    anthropicCalls,
+    deepSeekScript,
+    type DeepSeekAnswer,
+} from '../helpers/anthropic-fakes.js'
+import { writeInferenceStream } from '../helpers/inference-stream.js'
+import {
+    anthropicProfileConfig,
+    approveProjectConfig,
+    chatCalls,
+    FINDER_KEY,
+    finding,
+    profileConfig,
+    requestRecorder,
+    reviewMeta,
+    runDirs,
+    settingsRepo,
+    toolNames,
+    writeConfig,
+    type ReviewRepo,
+    type Wire,
+} from '../helpers/review.js'
+
+const REVIEW = ['review', '--no-verify', '--format', 'json',
+    '--error-format', 'json']
+const INTERACTIVE = [...REVIEW, '--interactive', '--max-turns', '2']
+const EXPLORE = { interactive:{ min_diff_lines:0, min_files:0 } }
+
+type Block = Record<string, unknown>
+type Body = {
+    model:string,
+    max_tokens:number,
+    system:Block[],
+    stream:boolean,
+    tools:{ name:string, input_schema:Record<string, unknown> }[],
+    tool_choice:{ type:string },
+    thinking?:unknown,
+    messages:{ role:string, content:Block[] }[],
+}
+
+function body (req:RecordedRequest):Body {
+    return req.body as Body
+}
+
+function submit (findings:Wire[] = []) {
+    return {
+        name:'submit_findings',
+        args:{
+            assessment:findings.length ? 'FINDINGS_PRESENT' : 'NO_FINDINGS',
+            findings,
+        },
+    }
+}
+
+function structured (findings:Wire[] = []) {
+    return { ...submit(findings), name:'findings' }
+}
+
+// Explore main.go once, then submit `findings`.
+function exploreThenSubmit (findings:Wire[] = []):Script {
+    return (_req, n) => ({
+        stream:n === 0 ?
+            anthropicCalls([{
+                name:'read_file', args:{ path:'main.go' },
+            }], { thinking:'look first' }) :
+            anthropicCalls([submit(findings)]),
+    })
+}
+
+async function anthropicRepo (
+    t:CleanupTest,
+    script:Script,
+    over:object = {},
+    profile:object = {}
+):Promise<ReviewRepo> {
+    const r = await settingsRepo(t, script, { config:null })
+    writeConfig(r.dir, anthropicProfileConfig(r.server.url, over, profile))
+    await approveProjectConfig(r)
+    return r
+}
+
+function lastError (stderr:string):Record<string, unknown> {
+    return JSON.parse(stderr.trim().split('\n').pop() ?? '')
+}
+
+test('anthropic review: native messages through the wrap-up turn',
+    async t => {
+        const r = await anthropicRepo(t, exploreThenSubmit(), EXPLORE)
+        const requests = requestRecorder(r)
+        const res = await r.roast(INTERACTIVE)
+        t.equal(res.code, 0, res.stderr)
+        const [first, second] = requests()
+        t.equal(requests().length, 2, 'two requests')
+        for (const q of requests()) {
+            t.equal(q.path, '/v1/messages', 'messages endpoint')
+            t.equal(q.headers['x-api-key'], FINDER_KEY, 'x-api-key')
+            t.ok(String(q.headers['anthropic-version'] ?? '') !== '',
+                'anthropic-version')
+            t.equal(q.headers.authorization, undefined, 'no authorization')
+            t.equal(body(q).stream, true, 'stream')
+            t.ok(body(q).system.length > 0, 'system blocks')
+        }
+        t.ok(toolNames(first).includes('read_file'), 'exploration tools')
+        t.deepEqual(body(second).tools, body(first).tools,
+            'same tools on the wrap-up turn')
+        const replay = body(second).messages
+        t.equal(replay.length, 3, 'user, assistant, user')
+        t.equal(replay[1].content[0].type, 'thinking',
+            'signed thinking replayed first')
+        const last = replay[2].content
+        t.ok(last.some(b => b.type === 'tool_result'), 'tool result')
+        t.ok(last.some(b => b.type === 'text'), 'injected notice')
+        t.equal(body(first).messages.length, 1, 'no notice at first')
+        const usage = reviewMeta(r).usage.finder
+        t.deepEqual(usage, {
+            uncached_input_tokens:20,
+            cached_input_tokens:6,
+            cache_write_tokens:4,
+            output_tokens:8,
+            calls:2,
+        }, 'usage accumulates')
+    })
+
+test('anthropic review gates on findings; base URL without /v1',
+    async t => {
+        const script:Script = () => ({
+            stream:anthropicCalls([structured([finding()])]),
+        })
+        const r = await settingsRepo(t, script, { config:null })
+        writeConfig(r.dir, anthropicProfileConfig(r.server.url, {}, {
+            endpoint:r.server.url,
+        }))
+        await approveProjectConfig(r)
+        const requests = requestRecorder(r)
+        const res = await r.roast([...REVIEW, '--max-severity', 'HIGH'])
+        t.equal(res.code, 1, res.stderr)
+        t.equal(JSON.parse(res.stdout).findings.length, 1, 'finding')
+        t.equal(requests()[0].path, '/v1/messages', 'v1 appended')
+        const ok = await r.roast([...REVIEW, '--max-severity',
+            'critical'])
+        t.equal(ok.code, 0, 'below the threshold exits 0')
+    })
+
+test('anthropic max_tokens is the profile budget', async t => {
+    for (const budget of [1024, 32768]) {
+        const r = await anthropicRepo(t, () => ({
+            stream:anthropicCalls([structured()]),
+        }), {}, { max_output_tokens:budget })
+        const requests = requestRecorder(r)
+        t.equal((await r.roast(REVIEW)).code, 0, `${budget}: review`)
+        t.equal(body(requests()[0]).max_tokens, budget, `${budget}`)
+    }
+})
+
+test('anthropic tool_choice is auto in every phase (DeepSeek fake)',
+    async t => {
+        const respond = (req:RecordedRequest, n:number):DeepSeekAnswer => {
+            const names = toolNames(req)
+            if (names.includes('submit_verdict')) {
+                return {
+                    tool:'submit_verdict',
+                    args:{
+                        reasoning:'checked',
+                        status:'confirmed',
+                        confidence:0.9,
+                        grounding:'line 4',
+                    },
+                }
+            }
+            const call = names.includes('findings') ?
+                structured([finding()]) :
+                submit([finding()])
+            return n === 1 && names.includes('read_file') ?
+                { tool:'read_file', args:{ path:'main.go' } } :
+                { tool:call.name, args:call.args }
+        }
+        for (const args of [[], ['--interactive', '--max-turns', '2']]) {
+            const fake = deepSeekScript('anthropic', respond)
+            const r = await anthropicRepo(t, fake.script, EXPLORE)
+            const requests = requestRecorder(r)
+            const res = await r.roast(['review', '--format', 'json',
+                ...args])
+            const label = args.length ? 'interactive' : 'structured'
+            t.equal(res.code, 0, `${label}: ${res.stderr}`)
+            t.equal(fake.rejected.length, 0, `${label}: nothing rejected`)
+            t.ok(requests().some(q =>
+                toolNames(q).includes('submit_verdict')),
+            `${label}: verifier ran`)
+            t.ok(requests().every(q =>
+                body(q).tool_choice.type === 'auto'),
+            `${label}: auto everywhere`)
+        }
+    })
+
+function withRequired (schema:Record<string, unknown>) {
+    return { ...schema, required:schema.required ?? [] }
+}
+
+test('anthropic input_schema is the full caller schema', async t => {
+    const anthropic = exploreThenSubmit()
+    const script:Script = (req, n) => req.path.endsWith('/v1/messages') ?
+        anthropic(req, n) :
+        { stream:chatCalls([submit()]) }
+    const r = await anthropicRepo(t, script, EXPLORE)
+    const requests = requestRecorder(r)
+    t.equal((await r.roast(INTERACTIVE)).code, 0, 'anthropic review')
+    const tools = body(requests()[0]).tools
+    // The chat adapter sends each caller schema unchanged.
+    writeConfig(r.dir, profileConfig(r.server.url, EXPLORE))
+    await approveProjectConfig(r)
+    t.equal((await r.roast(INTERACTIVE)).code, 0, 'chat review')
+    type ChatTool = {
+        function:{ name:string, parameters:Record<string, unknown> },
+    }
+    const chat = (requests()[2].body as { tools:ChatTool[] }).tools
+    t.equal(tools.length, chat.length, 'same tool count')
+    for (const tool of chat) {
+        const got = tools.find(a => a.name === tool.function.name)
+        t.deepEqual(got?.input_schema, withRequired(tool.function.parameters),
+            `${tool.function.name} schema`)
+    }
+    const text = JSON.stringify(tools)
+    t.ok(text.includes('"additionalProperties"'), 'additionalProperties')
+})
+
+test('only claude-mythos-preview gets adaptive thinking', async t => {
+    for (const model of ['claude-mythos-preview', 'claude-test']) {
+        const r = await anthropicRepo(t, () => ({
+            stream:anthropicCalls([structured()]),
+        }), {}, { model })
+        const requests = requestRecorder(r)
+        t.equal((await r.roast(REVIEW)).code, 0, `${model}: review`)
+        const thinking = body(requests()[0]).thinking
+        if (model === 'claude-test') {
+            t.equal(thinking, undefined, 'no thinking field')
+        } else {
+            t.deepEqual(thinking, { type:'adaptive', display:'summarized' },
+                'adaptive thinking')
+        }
+    }
+})
+
+test('anthropic 401 exits 3 with category auth', async t => {
+    const r = await anthropicRepo(t, () => ({
+        status:401,
+        headers:{ 'content-type':'application/json' },
+        body:'{"type":"error","error":{"type":"authentication_error",' +
+            '"message":"invalid x-api-key"}}',
+    }))
+    const res = await r.roast(REVIEW)
+    t.equal(res.code, 3, 'exit 3')
+    t.equal(lastError(res.stderr).error_category, 'auth', 'auth category')
+})
+
+test('an interrupted anthropic stream is retried; its tool never runs',
+    async t => {
+        const script:Script = (_req, n) => res => {
+            const response = n === 2 ?
+                anthropicCalls([submit()]) :
+                anthropicCalls([{
+                    name:'read_file', args:{ path:'main.go' },
+                }])
+            let out = ''
+            const sink = {
+                setHeader:(k:string, v:string) => res.setHeader(k, v),
+                write:(s:string) => { out += s },
+                end:() => {},
+            }
+            writeInferenceStream(sink, 'anthropic', response)
+            if (n === 0) out = out.slice(0, out.indexOf('event: message_stop'))
+            res.end(out)
+        }
+        const r = await anthropicRepo(t, script, EXPLORE)
+        const requests = requestRecorder(r)
+        const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+        t.equal(res.code, 0, res.stderr)
+        t.equal(requests().length, 3, 'three requests')
+        t.deepEqual(requests()[1].body, requests()[0].body,
+            'the retry resends the same request')
+        t.equal(body(requests()[2]).messages.filter(m =>
+            m.content.some(b => b.type === 'tool_result')).length, 1,
+        'only the completed call ran')
+        const lines = fs.readFileSync(path.join(runDirs(r)[0],
+            'provider-responses.jsonl'), 'utf8').trimEnd().split('\n')
+        t.equal(lines.length, 3, 'every stream captured')
+        t.equal(reviewMeta(r).usage.finder.calls, 2,
+            'usage counts completed calls only')
+    })
+// The command registration API. Area tickets describe their commands as
+// CommandDefs and list them in src/cli/commands.ts; tests add their own
+// with registerCommand. run.ts builds the yargs tree from both.
+import type { Argv, ArgumentsCamelCase } from 'yargs'
+import type { ErrorFormat } from './errors.js'
+import type { LineReader } from './terminal.js'
+
+// Everything a command handler may touch. Handlers never read process
+// globals: cwd, env, signal, and fetch come from here.
+export interface RunContext {
+    stdin:NodeJS.ReadableStream;
+    stdout:NodeJS.WritableStream;
+    stderr:NodeJS.WritableStream;
+    env:Readonly<Record<string, string|undefined>>;
+    cwd:string;
+    signal:AbortSignal;
+    fetch:typeof globalThis.fetch;
+    // The one line reader every prompt in this invocation shares.
+    lines:LineReader;
+    errorFormat:ErrorFormat;
+    // The command tokens that selected this handler, such as
+    // ['gate', 'enable']; empty for bare `roast`.
+    path:string[];
+    // The argv given to run(), without the program name.
+    argv:readonly string[];
+    // Root help, for commands that print it.
+    rootHelp ():Promise<string>;
+}
+
+export type CommandArgs = ArgumentsCamelCase<Record<string, unknown>>
+
+export interface CommandDef {
+    // A yargs command string, such as 'show <id>', or aliases.
+    command:string|readonly string[];
+    // Help description; false hides the command.
+    describe:string|false;
+    // Declares the command's flags and positionals.
+    builder?:(y:Argv) => Argv;
+    // Throws UsageError, ExitSignal, or any other error; never writes
+    // the error itself. A command with subcommands and no handler
+    // prints its help.
+    handler?:(args:CommandArgs, ctx:RunContext) => void|Promise<void>;
+    subcommands?:readonly CommandDef[];
+}
+
+const registered:CommandDef[] = []
+
+// Adds a command to every later run; returns a function removing it.
+export function registerCommand (def:CommandDef):() => void {
+    registered.push(def)
+    return () => {
+        const i = registered.indexOf(def)
+        if (i >= 0) registered.splice(i, 1)
+    }
+}
+
+export function registeredCommands ():readonly CommandDef[] {
+    return registered
+}
+// runRoast: the CLI run in-process (spec 01, 3.7) with buffer streams, a
+// temporary Git repository as cwd, a clean environment, and optionally a
+// fetch that sends every request to a fake server.
+import { run, type RunResult } from '../../src/cli/run.js'
+import { BufferStream, inputStream } from './streams.js'
+import { tempRepo } from './repo.js'
+
+export interface RunRoastOpts {
+    // Working directory; a fresh temporary repository when absent.
+    cwd?:string;
+    // The environment; the repository's isolated env when absent.
+    env?:Record<string, string>;
+    stdin?:NodeJS.ReadableStream|string;
+    signal?:AbortSignal;
+    // Origin (`http://127.0.0.1:port`) every request is redirected to.
+    redirectTo?:string;
+}
+
+export interface RunRoastResult extends RunResult {
+    stdout:string;
+    stderr:string;
+    // The original host of every redirected request, in order.
+    hosts:string[];
+}
+
+// A fetch that rewrites each URL's origin to `origin`, recording the
+// original host (Go redirectDefaultTransport).
+export function redirectingFetch (
+    origin:string,
+    hosts:string[]
+):typeof globalThis.fetch {
+    return (input, init) => {
+        const req = new Request(input, init)
+        const url = new URL(req.url)
+        hosts.push(url.host)
+        const target = new URL(url.pathname + url.search, origin)
+        return globalThis.fetch(new Request(target, req))
+    }
+}
+
+export async function runRoast (
+    args:string[],
+    opts:RunRoastOpts = {}
+):Promise<RunRoastResult> {
+    let cwd = opts.cwd
+    let env = opts.env
+    let remove:(() => void)|undefined
+    if (cwd === undefined) {
+        const repo = tempRepo()
+        cwd = repo.dir
+        env ??= repo.env
+        remove = repo.remove
+    }
+    const stdout = new BufferStream()
+    const stderr = new BufferStream()
+    const hosts:string[] = []
+    const stdin = typeof opts.stdin === 'string' || !opts.stdin ?
+        inputStream(opts.stdin ?? '') :
+        opts.stdin
+    try {
+        const res = await run(args, {
+            stdin,
+            stdout,
+            stderr,
+            env:env ?? {},
+            cwd,
+            signal:opts.signal,
+            fetch:opts.redirectTo ?
+                redirectingFetch(opts.redirectTo, hosts) :
+                undefined,
+        })
+        return {
+            ...res,
+            stdout:stdout.text(),
+            stderr:stderr.text(),
+            hosts,
+        }
+    } finally {
+        remove?.()
+    }
+}
+
+exec
+/bin/zsh -lc "rg -n 'reviewHooks|createReviewClient|createClient|roast\\(' src/cli/review.ts test/helpers/review.ts; cat test/llm/retry.ts" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ exited 1 in 0ms:
+src/cli/review.ts:36:import { createClient, createModelClient } from '../llm/client.js'
+src/cli/review.ts:105:export const reviewHooks:{
+src/cli/review.ts:181:    return createClient(createModelClient(config), { ledger })
+src/cli/review.ts:301:    const snapDeps = reviewHooks.snapshot?.(ctx) ??
+cat: test/llm/retry.ts: No such file or directory
+
+exec
+/bin/zsh -lc "sed -n '90,190p' src/cli/review.ts; rg -n 'roast:|roast =|function settingsRepo|interface ReviewRepo' test/helpers/review.ts; rg -n 'retry|sleep|abort' test/llm/agent*.ts" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+import {
+    type SnapshotDeps,
+    type WorktreePin,
+    captureSnapshot,
+    defaultSnapshotDeps,
+} from './snapshot-meta.js'
+import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+import { requireTrust } from './trust.js'
+
+const INTERACTIVE_MIN_DIFF_LINES = 80
+const INTERACTIVE_MIN_FILES = 4
+const VERIFIER_MAX_TURNS = 8
+const VERIFIER_SNIPPET_BYTES = 60_000
+
+// Swappable for tests: the snapshot area's functions.
+export const reviewHooks:{
+    snapshot:((ctx:RunContext) => SnapshotDeps)|null;
+} = { snapshot:null }
+
+// Exit selection after a completed run (spec 01, 2.2): a finalize
+// failure wins over the severity gate.
+export function reviewExitError (
+    finalErr:Error|null,
+    gateRank:number,
+    maxSev:number,
+    partial:boolean
+):Error|null {
+    if (finalErr) return finalErr
+    if (gateRank >= 0 && maxSev >= gateRank) return new ExitSignal(1)
+    if (partial) return new ExitSignal(4)
+    return null
+}
+
+function message (err:unknown):string {
+    return err instanceof Error ? err.message : String(err)
+}
+
+// Config and role failures are usage errors carrying the config area's
+// message.
+function asUsage<T> (fn:() => T):T {
+    try {
+        return fn()
+    } catch (err) {
+        if (err instanceof UsageError) throw err
+        throw new UsageError(message(err), { cause:err })
+    }
+}
+
+function wrap (prefix:string, err:unknown):Error {
+    return new Error(`${prefix}: ${message(err)}`, { cause:err })
+}
+
+function roleMeta (role:ResolvedRole, system:string):RoleMeta {
+    return {
+        profile:role.profile,
+        base_url:role.baseURL,
+        model:role.model,
+        protocol:role.protocol,
+        max_output_tokens:role.maxOutputTokens,
+        session_header:role.sessionHeader,
+        prompt_digest:digest(system),
+    }
+}
+
+function clientConfig (
+    name:string,
+    role:ResolvedRole,
+    capture:(raw:RawResponse) => Promise<void>,
+    maxAttempts:number,
+    requestTimeout:GoDuration,
+    fetch:typeof globalThis.fetch
+):ClientConfig {
+    return {
+        role:name,
+        baseUrl:role.baseURL.replace(/\/+$/, ''),
+        apiKey:role.apiKey,
+        model:role.model,
+        protocol:role.protocol as ''|Protocol,
+        maxOutputTokens:role.maxOutputTokens,
+        sessionHeader:role.sessionHeader,
+        maxAttempts,
+        requestTimeoutMs:toMillis(requestTimeout),
+        captureResponse:capture,
+        fetch,
+    }
+}
+
+function newClient (
+    config:ClientConfig,
+    ledger:Ledger|null
+):Client {
+    return createClient(createModelClient(config), { ledger })
+}
+
+type Format = 'json'|'markdown'|'both'
+
+function streams (ctx:RunContext):{ stdout:Writable, stderr:Writable } {
+    return {
+        stdout:ctx.stdout as Writable,
+        stderr:ctx.stderr as Writable,
+    }
+22:export interface ReviewRepo extends TempDir {
+224:export async function settingsRepo (
+248:        roast:(args, o = {}) => runRoast(args, {
+test/llm/agent-http.ts:73:        sleep:async () => {},
+test/llm/agent-http.ts:155:    t.equal(s.requests.length, 4, 'retry, correction, and a second run')
+test/llm/agent-helpers.ts:32:    // Whether the signal was already aborted when the request arrived.
+test/llm/agent-helpers.ts:33:    abortedAtSend:boolean;
+test/llm/agent-helpers.ts:71:                abortedAtSend:req.signal.aborted,
+test/llm/agent-helpers.ts:233:    sleeps:number[];
+test/llm/agent-helpers.ts:236:// A client over a fake model; sleeps are recorded and return at once.
+test/llm/agent-helpers.ts:243:    const sleeps:number[] = []
+test/llm/agent-helpers.ts:245:        sleep:async ms => { sleeps.push(ms) },
+test/llm/agent-helpers.ts:248:    return { ...fake, client, sleeps }
+test/llm/agent-helpers.ts:271:// Resolves when `s` aborts. Holds a timer meanwhile: AbortSignal.timeout
+test/llm/agent-helpers.ts:273:export function aborted (s:AbortSignal):Promise<void> {
+test/llm/agent-helpers.ts:275:        if (s.aborted) {
+test/llm/agent-helpers.ts:280:        s.addEventListener('abort', () => {
+test/llm/agent-deadline.ts:9:    aborted,
+test/llm/agent-deadline.ts:79:                await aborted(req.signal)
+test/llm/agent-deadline.ts:80:                // A tool call buffered before the abort.
+test/llm/agent-deadline.ts:94:        t.ok(!h.requests[1].abortedAtSend,
+test/llm/agent-deadline.ts:105:                await aborted(req.signal)
+test/llm/agent-deadline.ts:116:        t.equal(h.sleeps.length, 0, 'no retry delay')
+test/llm/agent-deadline.ts:151:test('abort: a buffered call is never dispatched after a caller abort',
+test/llm/agent-deadline.ts:158:                controller.abort(reason)
+test/llm/agent-deadline.ts:164:        t.equal(err, reason, "the caller's abort reason")
+test/llm/agent-finalization.ts:29:    aborted,
+test/llm/agent-finalization.ts:178:            controller.abort(reason)
+test/llm/agent-finalization.ts:179:            await aborted(req.signal)
+test/llm/agent-finalization.ts:186:    t.equal(err, reason, "the caller's abort reason")
+test/llm/agent-dispatch.ts:12:    aborted,
+test/llm/agent-dispatch.ts:139:test('retry: a transient failure is retried once', async t => {
+test/llm/agent-dispatch.ts:143:            headers:{ 'retry-after-ms':'1234' },
+test/llm/agent-dispatch.ts:149:    t.equal(out.summary, 'ok', 'the retry succeeds')
+test/llm/agent-dispatch.ts:151:    t.deepEqual(h.sleeps, [1234], 'honors retry-after-ms')
+test/llm/agent-dispatch.ts:153:        'the retry keeps the session ID')
+test/llm/agent-dispatch.ts:156:test('retry: maxAttempts 1 means no retries', async t => {
+test/llm/agent-dispatch.ts:182:test('ledger: aborting a call mid-flight releases its reservation',
+test/llm/agent-dispatch.ts:191:                controller.abort(reason)
+test/llm/agent-dispatch.ts:192:                await aborted(req.signal)
+test/llm/agent-dispatch.ts:198:        t.equal(err, reason, "the caller's abort reason")
+test/llm/agent-dispatch.ts:200:        t.ok(h.requests[0].signal.aborted, 'the request signal aborted')
+
+exec
+/bin/zsh -lc "mkdir -p .redeye; sed -n '20,40p;224,260p' test/helpers/review.ts; rg -n 'newClient\\(' src/cli/review.ts; cat package.json | rg 'test:one|lint|typecheck'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+export const VERIFIER_KEY = 'verifier-secret-key-do-not-print'
+
+export interface ReviewRepo extends TempDir {
+    server:InferenceServer;
+    // Runs roast in the repository against the fake server.
+    roast (args:string[], opts?:{
+        cwd?:string,
+        stdin?:string|NodeJS.ReadableStream,
+        signal?:AbortSignal,
+    }):Promise<RunRoastResult>;
+}
+
+export function gitIn (r:TempDir, args:string[], cwd = r.dir):string {
+    return execFileSync('git', args, { cwd, env:r.env }).toString()
+}
+
+export type Wire = {
+    severity:string;
+    confidence:number;
+    file:string;
+    lines:number[];
+export async function settingsRepo (
+    t:CleanupTest,
+    script:Script = finderScript(),
+    opts:{ config?:object|null, approve?:boolean } = {}
+):Promise<ReviewRepo> {
+    const r = tempRepo('roast-review-')
+    t.cleanup(r.remove)
+    const cwd = process.cwd()
+    process.chdir(r.dir)
+    t.cleanup(() => process.chdir(cwd))
+    const server = await startInferenceServer(script)
+    t.cleanup(() => server.close())
+    r.env.ROAST_FINDER_API_KEY = FINDER_KEY
+    r.env.ROAST_VERIFIER_API_KEY = VERIFIER_KEY
+    fs.writeFileSync(path.join(r.dir, 'main.go'), ORIGINAL)
+    gitIn(r, ['add', 'main.go'])
+    gitIn(r, ['commit', '-q', '-m', 'initial'])
+    fs.writeFileSync(path.join(r.dir, 'main.go'), CHANGED)
+    if (opts.config !== null) {
+        writeConfig(r.dir, opts.config ?? profileConfig(server.url))
+    }
+    const repo:ReviewRepo = {
+        ...r,
+        server,
+        roast:(args, o = {}) => runRoast(args, {
+            cwd:o.cwd ?? r.dir,
+            env:r.env,
+            stdin:o.stdin,
+            signal:o.signal,
+            redirectTo:server.url,
+        }),
+    }
+    if (opts.approve !== false && opts.config !== null) {
+        await approveProjectConfig(repo)
+    }
+    return repo
+}
+470:        const finder = newClient(clientConfig('finder', roles.finder, capture,
+503:            const verifier = newClient(clientConfig('verifier',
+    "lint": "node --import ./scripts/eslint-ts6.ts node_modules/eslint/bin/eslint.js src test scripts eslint.config.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:one": "bash -o pipefail -c 'node scripts/bundle.ts --test-file \"$0\" && node test/one-bundle.js | tap-spec'",
+    "preversion": "npm run lint",
+    "eslint": "^10.6.0",
+    "typescript-eslint": "^8.62.0"
+
+codex
+The agent already supports an injected sleep, but the review command
+doesn’t pass one through. I’ll add a narrow review test hook and retain
+the real HTTP stream and request assertions.
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/test/cli/review-anthropic.ts
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/cli/review-anthropic.ts' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ exited 1 in 11766ms:
+npm notice run @substrate-system/roast@0.0.5 test:one
+npm notice run bash -o pipefail -c 'node scripts/bundle.ts --test-file "$0" && node test/one-bundle.js | tap-spec' test/cli/review-anthropic.ts
+
+  anthropic review: native messages through the wrap-up turn
+
+    ✔ roast: using base 'master'
+    roast: finder=claude-test profile=fake protocol=anthropic endpoint=http://127.0.0.1:55898/v1
+    roast: run 20261126T031532Z-624f4e29 · report /private/var/folders/wc/j7p9ktnx3d99v5xm95s9h2480000gn/T/roast-review-wGFI7z/work/.roast/runs/20261126T031532Z-624f4e29/report.md
+    ✔ two requests
+    ✔ messages endpoint
+    ✔ x-api-key
+    ✔ anthropic-version
+    ✔ no authorization
+    ✔ stream
+    ✔ system blocks
+    ✔ messages endpoint
+    ✔ x-api-key
+    ✔ anthropic-version
+    ✔ no authorization
+    ✔ stream
+    ✔ system blocks
+    ✔ exploration tools
+    ✔ same tools on the wrap-up turn
+    ✔ user, assistant, user
+    ✔ signed thinking replayed first
+    ✔ tool result
+    ✔ injected notice
+    ✔ no notice at first
+    ✔ usage accumulates
+
+  anthropic review gates on findings; base URL without /v1
+
+    ✔ roast: using base 'master'
+    roast: finder=claude-test profile=fake protocol=anthropic endpoint=http://127.0.0.1:55900
+    roast: run 20261126T031532Z-9757263b · report /private/var/folders/wc/j7p9ktnx3d99v5xm95s9h2480000gn/T/roast-review-tmtlvQ/work/.roast/runs/20261126T031532Z-9757263b/report.md
+    ✔ finding
+    ✔ v1 appended
+    ✔ below the threshold exits 0
+
+  anthropic max_tokens is the profile budget
+
+    ✔ 1024: review
+    ✔ 1024
+    ✔ 32768: review
+    ✔ 32768
+
+  anthropic tool_choice is auto in every phase (DeepSeek fake)
+
+    ✔ structured: roast: no pre-commit gate in this repo; run `roast gate enable` to install it (non-interactive runs never install Git hooks without consent)
+    roast: using base 'master'
+    roast: finder=claude-test profile=fake protocol=anthropic endpoint=http://127.0.0.1:55924/v1
+    roast: verifying 1 finding(s) with claude-test (profile=fake protocol=anthropic)
+    roast: run 20261126T031533Z-87ebed46 · report /private/var/folders/wc/j7p9ktnx3d99v5xm95s9h2480000gn/T/roast-review-6kcVq6/work/.roast/runs/20261126T031533Z-87ebed46/report.md
+    ✔ structured: nothing rejected
+    ✔ structured: verifier ran
+    ✔ structured: auto everywhere
+    ✔ interactive: roast: no pre-commit gate in this repo; run `roast gate enable` to install it (non-interactive runs never install Git hooks without consent)
+    roast: using base 'master'
+    roast: finder=claude-test profile=fake protocol=anthropic endpoint=http://127.0.0.1:55931/v1
+    roast: verifying 1 finding(s) with claude-test (profile=fake protocol=anthropic)
+    roast: run 20261126T031534Z-8d570b33 · report /private/var/folders/wc/j7p9ktnx3d99v5xm95s9h2480000gn/T/roast-review-nd8qVH/work/.roast/runs/20261126T031534Z-8d570b33/report.md
+    ✔ interactive: nothing rejected
+    ✔ interactive: verifier ran
+    ✔ interactive: auto everywhere
+
+  anthropic input_schema is the full caller schema
+
+    ✔ anthropic review
+    ✔ chat review
+    ✔ same tool count
+    ✔ read_file schema
+    ✔ list_files schema
+    ✔ grep_repo schema
+    ✔ report_finding schema
+    ✔ submit_findings schema
+    ✔ __roast_continue schema
+    ✔ additionalProperties
+
+  only claude-mythos-preview gets adaptive thinking
+
+    ✔ claude-mythos-preview: review
+    ✔ adaptive thinking
+    ✔ claude-test: review
+    ✔ no thinking field
+    ✔ exit 3
+    ✔ auth category
+
+  an interrupted anthropic stream is retried; its tool never runs
+
+    ✔ roast: using base 'master'
+    roast: finder=claude-test profile=fake protocol=anthropic endpoint=http://127.0.0.1:55984/v1
+    roast: run 20261126T031537Z-d2d99a16 · report /private/var/folders/wc/j7p9ktnx3d99v5xm95s9h2480000gn/T/roast-review-eFPUNI/work/.roast/runs/20261126T031537Z-d2d99a16/report.md
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/src/cli/review.ts
+diff --git a/src/cli/review.ts b/src/cli/review.ts
+index fd902a6a58e15f954a56ed2732570537fda28b52..0475a21187afec5da34194d6ff37a62eada1ffb9
+--- a/src/cli/review.ts
++++ b/src/cli/review.ts
+@@ -95,15 +95,17 @@
+ } from './snapshot-meta.js'
+ import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+ import { requireTrust } from './trust.js'
++import type { Sleep } from '../llm/retry.js'
+ 
+ const INTERACTIVE_MIN_DIFF_LINES = 80
+ const INTERACTIVE_MIN_FILES = 4
+ const VERIFIER_MAX_TURNS = 8
+ const VERIFIER_SNIPPET_BYTES = 60_000
+ 
+-// Swappable for tests: the snapshot area's functions.
++// Swappable dependencies for in-process review tests.
+ export const reviewHooks:{
+     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
++    sleep?:Sleep;
+ } = { snapshot:null }
+ 
+ // Exit selection after a completed run (spec 01, 2.2): a finalize
+@@ -178,7 +180,9 @@
+     config:ClientConfig,
+     ledger:Ledger|null
+ ):Client {
+-    return createClient(createModelClient(config), { ledger })
++    return createClient(createModelClient(config), {
++        ledger, sleep:reviewHooks.sleep,
++    })
+ }
+ 
+ type Format = 'json'|'markdown'|'both'
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/cli/review-anthropic.ts > /tmp/roast-ticket04-review.log 2>&1; tail -n 12 /tmp/roast-ticket04-review.log' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+exec
+/bin/zsh -lc 'tail -n 20 /tmp/roast-ticket04-review.log' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+    ✔ interactive: verifier ran
+    ✔ interactive: auto everywhere
+
+  anthropic input_schema is the full caller schema
+
+    ✔ anthropic review
+    ✔ chat review
+    ✔ same tool count
+    ✔ read_file schema
+    ✔ list_files schema
+    ✔ grep_repo schema
+    ✔ report_finding schema
+    ✔ submit_findings schema
+    ✔ __roast_continue schema
+    ✔ additionalProperties
+
+  only claude-mythos-preview gets adaptive thinking
+
+    ✔ claude-mythos-preview: review
+    ✔ adaptive thinking
+
+ succeeded in 24410ms:
+    ✔ three requests
+    ✔ the retry resends the same request
+    ✔ only the completed call ran
+    ✔ every stream captured
+    ✔ usage counts completed calls only
+
+
+  total:     61
+  passing:   61
+  duration:  22.9s
+
+
+
+exec
+/bin/zsh -lc "git status --short; printf '%s\\n' 'Item 1: Review retry uses the existing agent sleep injection through' 'reviewHooks. The interrupted Anthropic HTTP stream test asserts the' '5000 ms decision and the original request, capture, and usage behavior.' 'Focused review-anthropic suite passed (61 assertions). The new assertion' 'failed before the hook was wired.' > .redeye/notes.md; git add src/cli/review.ts test/cli/review-anthropic.ts && git commit -m 'Control retry delay in review stream test'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 790ms:
+ M src/cli/review.ts
+ M test/cli/review-anthropic.ts
+[roast--faster-tests-04-control-review-retry-delays 773da34] Control retry delay in review stream test
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+codex
+[x] The interrupted-stream scenario verifies retry requests and the
+resulting behavior without a production-length sleep.
+
+The focused review test passes with the real HTTP exchange and records
+the requested five-second backoff without waiting for it. I’m checking
+cancellation and server-directed delays next.
+exec
+/bin/zsh -lc "sed -n '130,180p' test/llm/agent-dispatch.ts; cat test/helpers/inference-server.ts | head -n 120; rg -n 'retryAfter|retry-after|maxRetries' src/llm/{errors,agent}.ts; cat test/llm/agent-helpers.ts | sed -n '250,275p'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 85ms:
+    await h.client.converse('sys', 'user', options([tool], { maxTurns:1 }),
+        signal())
+    const sent = h.requests[0].tools.find(x => x.name === FINAL)
+    t.deepEqual(sent?.schema, FINAL_SCHEMA, 'schema intact')
+    t.equal(sent?.schema.additionalProperties, false,
+        'additionalProperties: false kept')
+    t.deepEqual(tool.schema, FINAL_SCHEMA, "the caller's copy unchanged")
+})
+
+test('retry: a transient failure is retried once', async t => {
+    const h = harness([
+        new ProviderError('503 Service Unavailable', {
+            status:503,
+            headers:{ 'retry-after-ms':'1234' },
+        }),
+        submit(),
+    ], { maxAttempts:2 })
+    const out = await h.client.converse('sys', 'user',
+        options([finalTool()], { maxTurns:1 }), signal())
+    t.equal(out.summary, 'ok', 'the retry succeeds')
+    t.equal(h.requests.length, 2, 'two requests')
+    t.deepEqual(h.sleeps, [1234], 'honors retry-after-ms')
+    t.equal(h.requests[0].sessionId, h.requests[1].sessionId,
+        'the retry keeps the session ID')
+})
+
+test('retry: maxAttempts 1 means no retries', async t => {
+    const h = harness([
+        new ProviderError('503 Service Unavailable', { status:503 }),
+        submit(),
+    ], { maxAttempts:1 })
+    const err = await failure(h.client.converse('sys', 'user',
+        options([finalTool()], { maxTurns:1 }), signal()))
+    t.ok(hasSentinel(err, 'endpoint'), 'endpoint')
+    t.equal(h.requests.length, 1, 'one request')
+})
+
+test('ledger: a refused first exploration call goes to one wrap-up call',
+    async t => {
+        let budget = 0
+        const read = readTool()
+        const h = harness([submit()], { maxOutputTokens:100 },
+            { ledger:newLedger(1500) })
+        const out = await h.client.converse('sys', 'user',
+            options([read, finalTool()], {
+                onBudgetExhausted:() => { budget++ },
+            }), signal())
+        t.equal(out.summary, 'ok', 'the wrap-up succeeds')
+        t.equal(h.requests.length, 1, 'one call')
+        t.equal(budget, 1, 'onBudgetExhausted fired')
+    })
+// A `node:http` fake inference server (Go httptest plus providerServer):
+// it records every request and answers from a script that looks at the
+// request (path, body, headers) and the request's position.
+import {
+    createServer,
+    type IncomingHttpHeaders,
+    type ServerResponse,
+} from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { writeInferenceStream } from './inference-stream.js'
+
+export interface RecordedRequest {
+    method:string;
+    path:string;
+    headers:IncomingHttpHeaders;
+    // Header names and values exactly as sent, in order.
+    rawHeaders:string[];
+    rawBody:Buffer;
+    // The parsed JSON body; undefined when it is not JSON.
+    body:unknown;
+}
+
+export type Reply =
+    // A complete response object, streamed in the protocol's SSE format;
+    // the protocol defaults to the one the request path implies.
+    | { stream:unknown, protocol?:string }
+    | { status:number, headers?:Record<string, string>, body?:string|Buffer }
+    // Full control: write the response yourself.
+    | ((res:ServerResponse, req:RecordedRequest) => void|Promise<void>)
+
+// Picks the reply for the n-th request (0-based).
+export type Script = (req:RecordedRequest, n:number) => Reply
+
+export interface InferenceServer {
+    // `http://127.0.0.1:<port>`.
+    url:string;
+    requests:RecordedRequest[];
+    close ():Promise<void>;
+}
+
+export function protocolForPath (path:string):string {
+    if (path.endsWith('/chat/completions')) return 'chat'
+    if (path.endsWith('/responses')) return 'responses'
+    if (path.endsWith('/v1/messages')) return 'anthropic'
+    return ''
+}
+
+async function reply (res:ServerResponse, req:RecordedRequest, r:Reply) {
+    if (typeof r === 'function') {
+        await r(res, req)
+        return
+    }
+    if ('stream' in r) {
+        writeInferenceStream(res, r.protocol ?? protocolForPath(req.path),
+            r.stream)
+        return
+    }
+    res.writeHead(r.status, r.headers ?? {})
+    res.end(r.body ?? '')
+}
+
+export async function startInferenceServer (
+    script:Script
+):Promise<InferenceServer> {
+    const requests:RecordedRequest[] = []
+    const server = createServer((req, res) => {
+        const parts:Buffer[] = []
+        req.on('data', (c:Buffer) => parts.push(c))
+        req.on('end', () => {
+            const rawBody = Buffer.concat(parts)
+            let body:unknown
+            try {
+                body = JSON.parse(rawBody.toString('utf8'))
+            } catch {
+                body = undefined
+            }
+            const rec:RecordedRequest = {
+                method:req.method ?? '',
+                path:req.url ?? '',
+                headers:req.headers,
+                rawHeaders:req.rawHeaders,
+                rawBody,
+                body,
+            }
+            const n = requests.length
+            requests.push(rec)
+            Promise.resolve()
+                .then(() => reply(res, rec, script(rec, n)))
+                .catch((err:unknown) => {
+                    if (!res.headersSent) res.writeHead(500)
+                    res.end(String(err))
+                })
+        })
+    })
+    await new Promise<void>(resolve => {
+        server.listen(0, '127.0.0.1', resolve)
+    })
+    const { port } = server.address() as AddressInfo
+    return {
+        url:`http://127.0.0.1:${port}`,
+        requests,
+        close () {
+            server.closeAllConnections()
+            return new Promise<void>(resolve => server.close(() => resolve()))
+        },
+    }
+}
+src/llm/errors.ts:271:    const ms = parseNumber(headers['retry-after-ms'])
+src/llm/errors.ts:273:    const after = headers['retry-after']
+src/llm/agent.ts:167:                    maxRetries:this.deps.maxAttempts - 1,
+
+export async function failure (p:Promise<unknown>):Promise<unknown> {
+    try {
+        await p
+    } catch (err) {
+        return err
+    }
+    throw new Error('expected a rejection')
+}
+
+export function signal ():AbortSignal {
+    return new AbortController().signal
+}
+
+// The tool results message of a recorded request, if its last item is
+// one.
+export function lastResults (r:Recorded) {
+    const last = r.items[r.items.length - 1]
+    return last?.role === 'tool' ? last.results : []
+}
+
+// Resolves when `s` aborts. Holds a timer meanwhile: AbortSignal.timeout
+// does not keep Node alive, a real request's socket would.
+export function aborted (s:AbortSignal):Promise<void> {
+    return new Promise(resolve => {
+        if (s.aborted) {
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/test/llm/agent-http.ts
+diff --git a/src/cli/review.ts b/src/cli/review.ts
+index fd902a6a58e15f954a56ed2732570537fda28b52..0475a21187afec5da34194d6ff37a62eada1ffb9
+--- a/src/cli/review.ts
++++ b/src/cli/review.ts
+@@ -95,15 +95,17 @@
+ } from './snapshot-meta.js'
+ import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+ import { requireTrust } from './trust.js'
++import type { Sleep } from '../llm/retry.js'
+ 
+ const INTERACTIVE_MIN_DIFF_LINES = 80
+ const INTERACTIVE_MIN_FILES = 4
+ const VERIFIER_MAX_TURNS = 8
+ const VERIFIER_SNIPPET_BYTES = 60_000
+ 
+-// Swappable for tests: the snapshot area's functions.
++// Swappable dependencies for in-process review tests.
+ export const reviewHooks:{
+     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
++    sleep?:Sleep;
+ } = { snapshot:null }
+ 
+ // Exit selection after a completed run (spec 01, 2.2): a finalize
+@@ -178,7 +180,9 @@
+     config:ClientConfig,
+     ledger:Ledger|null
+ ):Client {
+-    return createClient(createModelClient(config), { ledger })
++    return createClient(createModelClient(config), {
++        ledger, sleep:reviewHooks.sleep,
++    })
+ }
+ 
+ type Format = 'json'|'markdown'|'both'
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+diff --git a/test/llm/agent-http.ts b/test/llm/agent-http.ts
+index 3bf9b98d45424f595a4639f25f773b62ac323bda..efd8491588075f9453f5ad7701704b140ab4c99a
+--- a/test/llm/agent-http.ts
++++ b/test/llm/agent-http.ts
+@@ -10,6 +10,7 @@
+ import { createClient, createModelClient } from '../../src/llm/client.js'
+ import type { LlmError } from '../../src/llm/errors.js'
+ import { hasSentinel } from '../../src/llm/errors.js'
++import { defaultSleep } from '../../src/llm/retry.js'
+ import type { ClientConfig } from '../../src/llm/types.js'
+ import {
+     failure,
+@@ -164,6 +165,27 @@
+     }
+ })
+ 
++test('http: cancellation during a provider-directed retry delay', async t => {
++    const s = await server(t, (_req, n) => n === 0 ? {
++        status:503,
++        headers:{ 'retry-after-ms':'1' },
++        body:'{"error":{"message":"busy"}}',
++    } : { stream:toolCall('submit', { summary:'ok' }) })
++    const controller = new AbortController()
++    const reason = new Error('cancel during retry')
++    const delays:number[] = []
++    const c = client(s.url, { maxAttempts:2 }, async (ms, retrySignal) => {
++        delays.push(ms)
++        controller.abort(reason)
++        await defaultSleep(ms, retrySignal)
++    })
++    const err = await failure(c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), controller.signal))
++    t.equal(err, reason, 'returns the cancellation reason')
++    t.deepEqual(delays, [1], 'uses the provider retry delay')
++    t.equal(s.requests.length, 1, 'does not send another request')
++})
++
+ test('http: a call buffered before a request timeout is never run',
+     async t => {
+         const read = readTool()
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/llm/agent-http.ts > /tmp/roast-ticket04-http.log 2>&1; result=$?; tail -n 18 /tmp/roast-ticket04-http.log; exit $result' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+exec
+/bin/zsh -lc 'tail -n 25 /tmp/roast-ticket04-http.log' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 0ms:
+npm notice run @substrate-system/roast@0.0.5 test:one
+npm notice run bash -o pipefail -c 'node scripts/bundle.ts --test-file "$0" && node test/one-bundle.js | tap-spec' test/llm/agent-http.ts
+
+ exited 1 in 34494ms:
+    ✔ the buffered call never ran
+    ✔ promptly
+
+
+
+  Failed Tests: There was 1 failure
+
+    http: cancellation during a provider-directed retry delay
+
+      ✖ expected a rejection
+
+
+  total:     25
+  passing:   24
+  failing:   1
+  duration:  237ms
+
+
+
+exec
+/bin/zsh -lc "ps -o pid,etime,command -ax | rg 'one-bundle|bundle.ts|tap-spec'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 139ms:
+34821 05-01:34:02 /bin/bash -c node scripts/bundle.ts --test 2>&1 | tail -5 && node test/test-bundle.js 2>&1 | grep -E "not ok|# fail|# pass" | head -40
+92546       00:45 bash -o pipefail -c node scripts/bundle.ts --test-file "$0" && node test/one-bundle.js | tap-spec test/gate/exec.ts
+92551       00:45 node test/one-bundle.js
+92552       00:45 node /Users/nick/code/roast.faster-tests-06-reduce-git-gate-overhead/node_modules/.bin/tap-spec
+97534       00:20 bash -o pipefail -c node scripts/bundle.ts --test-file "$0" && node test/one-bundle.js | tap-spec test/cli/doctor.ts
+97535       00:20 node scripts/bundle.ts --test-file test/cli/doctor.ts
+98020       00:02 bash -o pipefail -c tmp=$(mktemp test/.one-XXXXXX) && mv "$tmp" "$tmp.js" && trap 'rm -f "$tmp.js"' EXIT && node scripts/bundle.ts --test-file "$0" --outfile "$tmp.js" && node "$tmp.js" | tap-spec test/tooling/test-tap.ts
+98027       00:01 node /Users/nick/code/roast.faster-tests-03-parallel-full-suite/node_modules/.bin/tap-spec
+98237       00:00 /bin/zsh -c ps -o pid,etime,command -ax | rg 'one-bundle|bundle.ts|tap-spec'
+98256       00:00 rg one-bundle|bundle.ts|tap-spec
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/test/llm/agent-http.ts
+diff --git a/src/cli/review.ts b/src/cli/review.ts
+index fd902a6a58e15f954a56ed2732570537fda28b52..0475a21187afec5da34194d6ff37a62eada1ffb9
+--- a/src/cli/review.ts
++++ b/src/cli/review.ts
+@@ -95,15 +95,17 @@
+ } from './snapshot-meta.js'
+ import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+ import { requireTrust } from './trust.js'
++import type { Sleep } from '../llm/retry.js'
+ 
+ const INTERACTIVE_MIN_DIFF_LINES = 80
+ const INTERACTIVE_MIN_FILES = 4
+ const VERIFIER_MAX_TURNS = 8
+ const VERIFIER_SNIPPET_BYTES = 60_000
+ 
+-// Swappable for tests: the snapshot area's functions.
++// Swappable dependencies for in-process review tests.
+ export const reviewHooks:{
+     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
++    sleep?:Sleep;
+ } = { snapshot:null }
+ 
+ // Exit selection after a completed run (spec 01, 2.2): a finalize
+@@ -178,7 +180,9 @@
+     config:ClientConfig,
+     ledger:Ledger|null
+ ):Client {
+-    return createClient(createModelClient(config), { ledger })
++    return createClient(createModelClient(config), {
++        ledger, sleep:reviewHooks.sleep,
++    })
+ }
+ 
+ type Format = 'json'|'markdown'|'both'
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+diff --git a/test/llm/agent-http.ts b/test/llm/agent-http.ts
+index 3bf9b98d45424f595a4639f25f773b62ac323bda..e2a368a5af0b6b2f227ea58b5b5d04d43425bceb
+--- a/test/llm/agent-http.ts
++++ b/test/llm/agent-http.ts
+@@ -10,6 +10,7 @@
+ import { createClient, createModelClient } from '../../src/llm/client.js'
+ import type { LlmError } from '../../src/llm/errors.js'
+ import { hasSentinel } from '../../src/llm/errors.js'
++import { defaultSleep, type Sleep } from '../../src/llm/retry.js'
+ import type { ClientConfig } from '../../src/llm/types.js'
+ import {
+     failure,
+@@ -68,9 +69,13 @@
+     }, 'tool_calls')
+ }
+ 
+-function client (url:string, over:Partial<ClientConfig> = {}) {
++function client (
++    url:string,
++    over:Partial<ClientConfig> = {},
++    sleep:Sleep = async () => {}
++) {
+     return createClient(createModelClient(cfg(url, over)), {
+-        sleep:async () => {},
++        sleep,
+     })
+ }
+ 
+@@ -164,6 +169,27 @@
+     }
+ })
+ 
++test('http: cancellation during a provider-directed retry delay', async t => {
++    const s = await server(t, (_req, n) => n === 0 ? {
++        status:503,
++        headers:{ 'retry-after-ms':'1' },
++        body:'{"error":{"message":"busy"}}',
++    } : { stream:toolCall('submit', { summary:'ok' }) })
++    const controller = new AbortController()
++    const reason = new Error('cancel during retry')
++    const delays:number[] = []
++    const c = client(s.url, { maxAttempts:2 }, async (ms, retrySignal) => {
++        delays.push(ms)
++        controller.abort(reason)
++        await defaultSleep(ms, retrySignal)
++    })
++    const err = await failure(c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), controller.signal))
++    t.equal(err, reason, 'returns the cancellation reason')
++    t.deepEqual(delays, [1], 'uses the provider retry delay')
++    t.equal(s.requests.length, 1, 'does not send another request')
++})
++
+ test('http: a call buffered before a request timeout is never run',
+     async t => {
+         const read = readTool()
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/llm/agent-http.ts > /tmp/roast-ticket04-http.log 2>&1; result=$?; tail -n 16 /tmp/roast-ticket04-http.log; exit $result' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 897ms:
+    ✔ uses the provider retry delay
+    ✔ does not send another request
+
+  http: a call buffered before a request timeout is never run
+
+    ✔ endpoint
+    ✔ after one call
+    ✔ the buffered call never ran
+    ✔ promptly
+
+
+  total:     27
+  passing:   27
+  duration:  292ms
+
+
+
+exec
+/bin/zsh -lc "printf '%s\\n' '' 'Item 2: Added HTTP-level coverage of a provider retry hint and caller' 'cancellation during the actual abortable sleep, asserting the reason and' 'that no second request is sent. The test failed before the HTTP helper' 'accepted the injected sleep and passes afterward (27 assertions).' >> .redeye/notes.md; git add test/llm/agent-http.ts && git commit -m 'Test cancellation during HTTP retry delay'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 553ms:
+[roast--faster-tests-04-control-review-retry-delays d5eab94] Test cancellation during HTTP retry delay
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+codex
+[x] Controlled delay tests verify retry delay decisions and cancellation
+at the relevant agent, CLI, or HTTP seam.
+
+The HTTP test now checks that a provider’s retry hint reaches the delay
+and that cancellation prevents a second request. The existing real timer
+and HTTP timeout test remains in place.
+exec
+/bin/zsh -lc "rg -n 'defaultSleep|withStepRetry|retry-after|setTimeout' test/llm | head -n 80; git status --short" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 107ms:
+test/llm/agent-http.ts:13:import { defaultSleep, type Sleep } from '../../src/llm/retry.js'
+test/llm/agent-http.ts:175:        headers:{ 'retry-after-ms':'1' },
+test/llm/agent-http.ts:184:        await defaultSleep(ms, retrySignal)
+test/llm/errors.ts:110:    t.equal(retryDelayMs(h({ 'retry-after-ms':'1500' }), 5000, now), 1500,
+test/llm/errors.ts:111:        'retry-after-ms')
+test/llm/errors.ts:112:    t.equal(retryDelayMs(h({ 'retry-after-ms':'2.5' }), 5000, now), 2.5,
+test/llm/errors.ts:114:    t.equal(retryDelayMs(h({ 'retry-after':'3' }), 5000, now), 3000,
+test/llm/errors.ts:115:        'retry-after seconds')
+test/llm/errors.ts:116:    t.equal(retryDelayMs(h({ 'retry-after':'0.5' }), 5000, now), 500,
+test/llm/errors.ts:119:        'retry-after':'Thu, 01 Jan 2026 00:00:07 GMT',
+test/llm/errors.ts:120:    }), 5000, now), 7000, 'retry-after date')
+test/llm/errors.ts:122:        'retry-after-ms':'100', 'retry-after':'9',
+test/llm/errors.ts:124:    t.equal(retryDelayMs(h({ 'retry-after':'120' }), 5000, now), 5000,
+test/llm/errors.ts:126:    t.equal(retryDelayMs(h({ 'retry-after':'120' }), 200000, now), 120000,
+test/llm/errors.ts:128:    t.equal(retryDelayMs(h({ 'retry-after':'-1' }), 5000, now), 5000,
+test/llm/errors.ts:130:    t.equal(retryDelayMs(h({ 'retry-after':'soon' }), 5000, now), 5000,
+test/llm/errors.ts:133:        'retry-after':'Wed, 31 Dec 2025 23:59:00 GMT',
+test/llm/client.ts:461:    setTimeout(() => ac.abort(reason), 20)
+test/llm/agent-dispatch.ts:67:            await new Promise(resolve => setTimeout(resolve, delays[k]))
+test/llm/agent-dispatch.ts:143:            headers:{ 'retry-after-ms':'1234' },
+test/llm/agent-dispatch.ts:151:    t.deepEqual(h.sleeps, [1234], 'honors retry-after-ms')
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/test/llm/agent-http.ts
+diff --git a/src/cli/review.ts b/src/cli/review.ts
+index fd902a6a58e15f954a56ed2732570537fda28b52..0475a21187afec5da34194d6ff37a62eada1ffb9
+--- a/src/cli/review.ts
++++ b/src/cli/review.ts
+@@ -95,15 +95,17 @@
+ } from './snapshot-meta.js'
+ import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+ import { requireTrust } from './trust.js'
++import type { Sleep } from '../llm/retry.js'
+ 
+ const INTERACTIVE_MIN_DIFF_LINES = 80
+ const INTERACTIVE_MIN_FILES = 4
+ const VERIFIER_MAX_TURNS = 8
+ const VERIFIER_SNIPPET_BYTES = 60_000
+ 
+-// Swappable for tests: the snapshot area's functions.
++// Swappable dependencies for in-process review tests.
+ export const reviewHooks:{
+     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
++    sleep?:Sleep;
+ } = { snapshot:null }
+ 
+ // Exit selection after a completed run (spec 01, 2.2): a finalize
+@@ -178,7 +180,9 @@
+     config:ClientConfig,
+     ledger:Ledger|null
+ ):Client {
+-    return createClient(createModelClient(config), { ledger })
++    return createClient(createModelClient(config), {
++        ledger, sleep:reviewHooks.sleep,
++    })
+ }
+ 
+ type Format = 'json'|'markdown'|'both'
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+diff --git a/test/llm/agent-http.ts b/test/llm/agent-http.ts
+index 3bf9b98d45424f595a4639f25f773b62ac323bda..ea1146a5f015d1feadd2ee6095550deae0e77282
+--- a/test/llm/agent-http.ts
++++ b/test/llm/agent-http.ts
+@@ -10,6 +10,7 @@
+ import { createClient, createModelClient } from '../../src/llm/client.js'
+ import type { LlmError } from '../../src/llm/errors.js'
+ import { hasSentinel } from '../../src/llm/errors.js'
++import { defaultSleep, type Sleep } from '../../src/llm/retry.js'
+ import type { ClientConfig } from '../../src/llm/types.js'
+ import {
+     failure,
+@@ -68,9 +69,13 @@
+     }, 'tool_calls')
+ }
+ 
+-function client (url:string, over:Partial<ClientConfig> = {}) {
++function client (
++    url:string,
++    over:Partial<ClientConfig> = {},
++    sleep:Sleep = async () => {}
++) {
+     return createClient(createModelClient(cfg(url, over)), {
+-        sleep:async () => {},
++        sleep,
+     })
+ }
+ 
+@@ -164,6 +169,50 @@
+     }
+ })
+ 
++test('http: cancellation during a provider-directed retry delay', async t => {
++    const s = await server(t, (_req, n) => n === 0 ? {
++        status:503,
++        headers:{ 'retry-after-ms':'1' },
++        body:'{"error":{"message":"busy"}}',
++    } : { stream:toolCall('submit', { summary:'ok' }) })
++    const controller = new AbortController()
++    const reason = new Error('cancel during retry')
++    const delays:number[] = []
++    const c = client(s.url, { maxAttempts:2 }, async (ms, retrySignal) => {
++        delays.push(ms)
++        controller.abort(reason)
++        await defaultSleep(ms, retrySignal)
++    })
++    const err = await failure(c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), controller.signal))
++    t.equal(err, reason, 'returns the cancellation reason')
++    t.deepEqual(delays, [1], 'uses the provider retry delay')
++    t.equal(s.requests.length, 1, 'does not send another request')
++})
++
++test('http: the default retry delay uses a real timer', async t => {
++    let timerFired = false
++    let firedBeforeRetry = false
++    const s = await server(t, (_req, n) => {
++        if (n === 0) {
++            setTimeout(() => { timerFired = true }, 10)
++            return {
++                status:503,
++                headers:{ 'retry-after-ms':'100' },
++                body:'{"error":{"message":"busy"}}',
++            }
++        }
++        firedBeforeRetry = timerFired
++        return { stream:toolCall('submit', { summary:'ok' }) }
++    })
++    const c = createClient(createModelClient(cfg(s.url, { maxAttempts:2 })))
++    const out = await c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), signal())
++    t.equal(out.summary, 'ok', 'retry succeeds')
++    t.equal(s.requests.length, 2, 'sends the retry')
++    t.ok(firedBeforeRetry, 'waits for a real timer before retrying')
++})
++
+ test('http: a call buffered before a request timeout is never run',
+     async t => {
+         const read = readTool()
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/llm/agent-http.ts > /tmp/roast-ticket04-http.log 2>&1; result=$?; tail -n 12 /tmp/roast-ticket04-http.log; exit $result' in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 1059ms:
+
+    ✔ endpoint
+    ✔ after one call
+    ✔ the buffered call never ran
+    ✔ promptly
+
+
+  total:     30
+  passing:   30
+  duration:  387ms
+
+
+
+codex
+The retained coverage now includes a real HTTP retry using the default
+timer, as well as the existing real request-timeout test. I’ll run the
+required checks and the full suite before the final commit.
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-04-control-review-retry-delays/AGENTS.md
+diff --git a/AGENTS.md b/AGENTS.md
+index 3b73d12c8f61623e9ca1e1425319296e4724349f..23792c863de92df4005f7742392ad88f949ed0ab
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -57,6 +57,8 @@
+   the like. Read and write such files with the editor tools.
+ - Review record initialization follows scope and prompt validation; early
+   failures can leave no record, while later failures can retain evidence.
++- In-process review tests can inject retry sleep through `reviewHooks`;
++  restore the hook with `t.cleanup` after each test.
+ - Tests that write project state (run records, trust, stored
+   credentials) chdir into a temporary Git repository first. `.roast/`
+   ignores itself, so a leak into this checkout is invisible to
+diff --git a/src/cli/review.ts b/src/cli/review.ts
+index fd902a6a58e15f954a56ed2732570537fda28b52..0475a21187afec5da34194d6ff37a62eada1ffb9
+--- a/src/cli/review.ts
++++ b/src/cli/review.ts
+@@ -95,15 +95,17 @@
+ } from './snapshot-meta.js'
+ import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
+ import { requireTrust } from './trust.js'
++import type { Sleep } from '../llm/retry.js'
+ 
+ const INTERACTIVE_MIN_DIFF_LINES = 80
+ const INTERACTIVE_MIN_FILES = 4
+ const VERIFIER_MAX_TURNS = 8
+ const VERIFIER_SNIPPET_BYTES = 60_000
+ 
+-// Swappable for tests: the snapshot area's functions.
++// Swappable dependencies for in-process review tests.
+ export const reviewHooks:{
+     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
++    sleep?:Sleep;
+ } = { snapshot:null }
+ 
+ // Exit selection after a completed run (spec 01, 2.2): a finalize
+@@ -178,7 +180,9 @@
+     config:ClientConfig,
+     ledger:Ledger|null
+ ):Client {
+-    return createClient(createModelClient(config), { ledger })
++    return createClient(createModelClient(config), {
++        ledger, sleep:reviewHooks.sleep,
++    })
+ }
+ 
+ type Format = 'json'|'markdown'|'both'
+diff --git a/test/cli/review-anthropic.ts b/test/cli/review-anthropic.ts
+index 70c6651e58c5ddd2f2e6dd5d0f51763d476a4a83..a9ea58eef6f23fbe65b07c92db34f48c56ab5025
+--- a/test/cli/review-anthropic.ts
++++ b/test/cli/review-anthropic.ts
+@@ -2,6 +2,7 @@
+ // server (spec 06, 5; ticket 28).
+ import fs from 'node:fs'
+ import path from 'node:path'
++import { reviewHooks } from '../../src/cli/review.js'
+ import { test, type CleanupTest } from '../helpers/test.js'
+ import type {
+     RecordedRequest,
+@@ -281,8 +282,12 @@
+         }
+         const r = await anthropicRepo(t, script, EXPLORE)
+         const requests = requestRecorder(r)
++        const delays:number[] = []
++        reviewHooks.sleep = async ms => { delays.push(ms) }
++        t.cleanup(() => { reviewHooks.sleep = undefined })
+         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
+         t.equal(res.code, 0, res.stderr)
++        t.deepEqual(delays, [5000], 'uses the initial retry delay')
+         t.equal(requests().length, 3, 'three requests')
+         t.deepEqual(requests()[1].body, requests()[0].body,
+             'the retry resends the same request')
+diff --git a/test/llm/agent-http.ts b/test/llm/agent-http.ts
+index 3bf9b98d45424f595a4639f25f773b62ac323bda..ea1146a5f015d1feadd2ee6095550deae0e77282
+--- a/test/llm/agent-http.ts
++++ b/test/llm/agent-http.ts
+@@ -10,6 +10,7 @@
+ import { createClient, createModelClient } from '../../src/llm/client.js'
+ import type { LlmError } from '../../src/llm/errors.js'
+ import { hasSentinel } from '../../src/llm/errors.js'
++import { defaultSleep, type Sleep } from '../../src/llm/retry.js'
+ import type { ClientConfig } from '../../src/llm/types.js'
+ import {
+     failure,
+@@ -68,9 +69,13 @@
+     }, 'tool_calls')
+ }
+ 
+-function client (url:string, over:Partial<ClientConfig> = {}) {
++function client (
++    url:string,
++    over:Partial<ClientConfig> = {},
++    sleep:Sleep = async () => {}
++) {
+     return createClient(createModelClient(cfg(url, over)), {
+-        sleep:async () => {},
++        sleep,
+     })
+ }
+ 
+@@ -164,6 +169,50 @@
+     }
+ })
+ 
++test('http: cancellation during a provider-directed retry delay', async t => {
++    const s = await server(t, (_req, n) => n === 0 ? {
++        status:503,
++        headers:{ 'retry-after-ms':'1' },
++        body:'{"error":{"message":"busy"}}',
++    } : { stream:toolCall('submit', { summary:'ok' }) })
++    const controller = new AbortController()
++    const reason = new Error('cancel during retry')
++    const delays:number[] = []
++    const c = client(s.url, { maxAttempts:2 }, async (ms, retrySignal) => {
++        delays.push(ms)
++        controller.abort(reason)
++        await defaultSleep(ms, retrySignal)
++    })
++    const err = await failure(c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), controller.signal))
++    t.equal(err, reason, 'returns the cancellation reason')
++    t.deepEqual(delays, [1], 'uses the provider retry delay')
++    t.equal(s.requests.length, 1, 'does not send another request')
++})
++
++test('http: the default retry delay uses a real timer', async t => {
++    let timerFired = false
++    let firedBeforeRetry = false
++    const s = await server(t, (_req, n) => {
++        if (n === 0) {
++            setTimeout(() => { timerFired = true }, 10)
++            return {
++                status:503,
++                headers:{ 'retry-after-ms':'100' },
++                body:'{"error":{"message":"busy"}}',
++            }
++        }
++        firedBeforeRetry = timerFired
++        return { stream:toolCall('submit', { summary:'ok' }) }
++    })
++    const c = createClient(createModelClient(cfg(s.url, { maxAttempts:2 })))
++    const out = await c.converse('sys', 'user',
++        options([finalTool()], { maxTurns:1 }), signal())
++    t.equal(out.summary, 'ok', 'retry succeeds')
++    t.equal(s.requests.length, 2, 'sends the retry')
++    t.ok(firedBeforeRetry, 'waits for a real timer before retrying')
++})
++
+ test('http: a call buffered before a request timeout is never run',
+     async t => {
+         const read = readTool()
+
+exec
+/bin/zsh -lc "printf '%s\\n' '' 'Item 3: Retained the existing HTTP timeout test and added an HTTP retry' 'using the real default timer and a short provider hint. This is a' 'preservation requirement: it already passes against existing behavior,' 'so no honest red phase or production change is applicable. The focused' 'HTTP suite passes (30 assertions). Added the reusable hook cleanup note.' >> .redeye/notes.md
+npm run lint && npm run typecheck && npm test > /tmp/roast-ticket04-full.log 2>&1" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+codex
+The focused suites pass. The full gate is running now; lint has reported
+only the project’s existing deprecated ESLint option warning so far.
+exec
+/bin/zsh -lc "git status --short; ls -a | rg '"'^'"\\.roast"'$|''^'"\\.redeye"'$'"'" in /Users/nick/code/roast.faster-tests-04-control-review-retry-delays
+ succeeded in 278ms:
+ M AGENTS.md
+ M test/llm/agent-http.ts
+.redeye
+
+codex
+Lint and typechecking have passed. The full non-live suite is still
+running; it retains the repository’s serial test runner for this ticket.
+codex
+The full suite is still in progress. The production retry policy is
+unchanged; the new hook is used only when an in-process test supplies it.
+ERROR: You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 30th, 2026 5:46 PM.
+ERROR: You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 30th, 2026 5:46 PM.
+2026-11-26T03:20:54.278508Z ERROR codex_core::session: failed to record rollout items: thread 01a215d9-48b9-7100-b9a8-8f510db2d891 not found
+tokens used
+53,330

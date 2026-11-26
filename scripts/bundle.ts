@@ -26,7 +26,7 @@ const REQUIRE_SHIM = [
 
 type Mode =
     { kind:'cli'|'test'|'live' }|
-    { kind:'test-file', file:string }
+    { kind:'test-file', file:string, outfile:string }
 
 function parseMode (args:string[]):Mode {
     if (args.length === 0) return { kind:'cli' }
@@ -34,7 +34,15 @@ function parseMode (args:string[]):Mode {
     if (args.length === 1 && args[0] === '--live') return { kind:'live' }
     if (args.length === 2 && args[0] === '--test-file' &&
         args[1].endsWith('.ts')) {
-        return { kind:'test-file', file:args[1] }
+        return {
+            kind:'test-file',
+            file:args[1],
+            outfile:'test/one-bundle.js',
+        }
+    }
+    if (args.length === 4 && args[0] === '--test-file' &&
+        args[1].endsWith('.ts') && args[2] === '--outfile') {
+        return { kind:'test-file', file:args[1], outfile:args[3] }
     }
     throw new Error('usage: node scripts/bundle.ts ' +
         '[--test|--test-file <path.ts>|--live], ' +
@@ -123,7 +131,7 @@ async function main ():Promise<void> {
         return bundleTests('test/index.ts', 'test/test-bundle.js')
     }
     if (mode.kind === 'test-file') {
-        return bundleTests(mode.file, 'test/one-bundle.js')
+        return bundleTests(mode.file, mode.outfile)
     }
     return bundleTests('test/live/index.ts', 'test/live-bundle.js')
 }

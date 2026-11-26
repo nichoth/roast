@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "adversary": {
+      "source": "nichoth/skills",
+      "commit": "519b2da7b9d4be9af2357050402b28e435d3894f",
+      "sourceType": "github",
+      "skillPath": "src/adversary/SKILL.md",
+      "computedHash": "385203010ee2e606710780d2f730609cb774c51553aa831450fcd577efa3f6ca"
+    }
+  }
+}

@@ -2,6 +2,7 @@
 // server (spec 06, 5; ticket 28).
 import fs from 'node:fs'
 import path from 'node:path'
+import { reviewHooks } from '../../src/cli/review.js'
 import { test, type CleanupTest } from '../helpers/test.js'
 import type {
     RecordedRequest,
@@ -281,8 +282,12 @@ test('an interrupted anthropic stream is retried; its tool never runs',
         }
         const r = await anthropicRepo(t, script, EXPLORE)
         const requests = requestRecorder(r)
+        const delays:number[] = []
+        reviewHooks.sleep = async ms => { delays.push(ms) }
+        t.cleanup(() => { reviewHooks.sleep = undefined })
         const res = await r.roast([...INTERACTIVE, '--max-attempts', '2'])
         t.equal(res.code, 0, res.stderr)
+        t.deepEqual(delays, [5000], 'uses the initial retry delay')
         t.equal(requests().length, 3, 'three requests')
         t.deepEqual(requests()[1].body, requests()[0].body,
             'the retry resends the same request')

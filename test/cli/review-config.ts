@@ -33,7 +33,7 @@ test('a JSONC config with comments is used', async t => {
     const r = await settingsRepo(t, undefined, { config:null })
     const json = JSON.stringify(withModel(r.server.url, 'jsonc-model'),
         null, 2)
-    fs.writeFileSync(path.join(r.dir, '.roast.json'),
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
         '// project config\n' + json.replace(/\n}$/, ',\n}') + '\n')
     await approveProjectConfig(r)
     const requests = requestRecorder(r)
@@ -68,9 +68,9 @@ test('invalid and missing configs are usage errors', async t => {
     const missing = await r.roast(REVIEW)
     t.equal(missing.code, 2, 'missing config exits 2')
     t.ok(missing.stderr.includes('npx roast init'), 'names npx roast init')
-    fs.writeFileSync(path.join(r.dir, '.roast.json'), '{')
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), '{')
     t.equal((await r.roast(REVIEW)).code, 2, 'invalid config exits 2')
-    fs.writeFileSync(path.join(r.dir, '.roast.json'),
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
         JSON.stringify({ version:1, bogus:true }))
     t.equal((await r.roast(REVIEW)).code, 2, 'unknown key exits 2')
     t.equal(requests().length, 0, 'no request')
@@ -85,7 +85,7 @@ test('the user config directory is never read', async t => {
         path.join(r.env.HOME, '.roast'),
     ]) {
         fs.mkdirSync(dir, { recursive:true })
-        fs.writeFileSync(path.join(dir, '.roast.json'), cfg)
+        fs.writeFileSync(path.join(dir, '.roast.jsonc'), cfg)
         fs.writeFileSync(path.join(dir, 'config.json'), cfg)
     }
     const requests = requestRecorder(r)

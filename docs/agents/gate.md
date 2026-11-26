@@ -13,15 +13,15 @@
   that exits non-zero, warns and allows the commit; only review exit 1
   blocks.
 - The hook runs from the Git toplevel without `--config`, so it sees
-  only a toplevel `.roast.json` (`gateConfigPath` in
+  only a toplevel `.roast.jsonc` (`gateConfigPath` in
   `src/cli/config.ts`). `gate enable` refuses and the review-time
   bootstrap stays silent without one; `gate enable` tests write a
   toplevel config first.
 - Installed hooks are refreshed by content comparison with the script,
   so editing it needs no version bump.
-- `HOOK_SCRIPT` stays byte-identical to the script the Go releases
-  installed, so those hooks are not reported stale. `hook.ts` handles
-  hook bodies as `Buffer`s so strip keeps every foreign byte. Hook
+- The config filename change makes hooks from older releases stale;
+  refresh them when enabling the gate. `hook.ts` handles hook bodies
+  as `Buffer`s so strip keeps every foreign byte. Hook
   writes use `fsutil` `writeFileAtomic` with `mode`.
 
 ## Tests
@@ -34,7 +34,7 @@
   happened.
 - Gate tests build repos with `gateRepo(t)` (`test/gate/helpers.ts`:
   global/system git config cut out, maintenance off, toplevel
-  `.roast.json`); hook execution tests use `seededRepo`, `newStub`, and
+  `.roast.jsonc`); hook execution tests use `seededRepo`, `newStub`, and
   `commit` from `test/gate/exec-helpers.ts`.
 - Simulate a non-local `roast.gate` with
   `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0`, never a global file.

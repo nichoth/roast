@@ -11,11 +11,11 @@ import {
 import type { RunContext } from './command.js'
 import { UsageError } from './errors.js'
 
-export const NO_PROJECT_CONFIG = 'no project config (.roast.json) found ' +
+export const NO_PROJECT_CONFIG = 'no project config (.roast.jsonc) found ' +
     'between here and the Git toplevel; run `npx roast init` to create one'
 
 export const NO_GATE_CONFIG = 'the pre-commit gate runs from the Git ' +
-    'toplevel and finds no .roast.json there; put the project config at ' +
+    'toplevel and finds no .roast.jsonc there; put the project config at ' +
     'the toplevel (`npx roast init`) before enabling the gate'
 
 type ConfigContext = Pick<RunContext, 'cwd'|'env'|'signal'>
@@ -26,7 +26,7 @@ function usage (err:unknown):UsageError {
 }
 
 // The config path: `explicit` (--config) unchanged when set, else the
-// nearest .roast.json from the working directory up to the Git toplevel
+// nearest .roast.jsonc from the working directory up to the Git toplevel
 // (the working directory itself outside a repository). '' when none.
 export async function projectConfigPath (
     explicit:string,
@@ -45,7 +45,7 @@ export async function projectConfigPath (
     return findConfig(ctx.cwd, stop)
 }
 
-// The config the pre-commit hook sees: only <toplevel>/.roast.json.
+// The config the pre-commit hook sees: only <toplevel>/.roast.jsonc.
 export function gateConfigPath (repo:string):string {
     return findConfig(repo, repo)
 }

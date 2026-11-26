@@ -76,7 +76,7 @@ async function verifyRepo (
     verifier:object = {}
 ) {
     const r = await settingsRepo(t, s, { config:null })
-    fs.writeFileSync(path.join(r.dir, '.roast.json'),
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
         JSON.stringify(verifyConfig(r.server.url, verifier), null, 2))
     const trust = await r.roast(['trust', '--yes'])
     if (trust.code !== 0) throw new Error(`trust failed: ${trust.stderr}`)

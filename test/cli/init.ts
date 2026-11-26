@@ -38,11 +38,11 @@ test('init rejects existing config before any other work', async t => {
     const repo = tempRepo()
     t.cleanup(repo.remove)
     fs.writeFileSync(
-        path.join(repo.dir, '.roast.json'),
+        path.join(repo.dir, '.roast.jsonc'),
         '{"version":1}'
     )
     const original = fs.readFileSync(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const result = await runRoast(['init', '--no-login'], {
         cwd:repo.dir, env:repo.env,
@@ -53,7 +53,7 @@ test('init rejects existing config before any other work', async t => {
         'mentions already exists'
     )
     t.deepEqual(
-        fs.readFileSync(path.join(repo.dir, '.roast.json')),
+        fs.readFileSync(path.join(repo.dir, '.roast.jsonc')),
         original,
         'file unchanged'
     )
@@ -71,7 +71,7 @@ test('init rejects unplaceable models before writing anything', async t => {
             'unknown-model'], { cwd:repo.dir, env:repo.env })
         t.equal(result.code, 2)
         t.ok(result.stderr.includes(`--${role}-model`))
-        t.ok(!fs.existsSync(path.join(repo.dir, '.roast.json')))
+        t.ok(!fs.existsSync(path.join(repo.dir, '.roast.jsonc')))
         t.ok(!fs.existsSync(path.join(repo.dir, '.gitignore')))
     }
 })
@@ -84,7 +84,7 @@ test('init writes usable model settings and preserves existing bytes',
             '--verifier-model', 'claude-opus-5-5']
         const result = await runRoast(args, { cwd:repo.dir, env:repo.env })
         t.equal(result.code, 0)
-        const file = path.join(repo.dir, '.roast.json')
+        const file = path.join(repo.dir, '.roast.jsonc')
         t.ok(result.stdout.includes(file), 'prints the absolute path')
         t.equal(fs.statSync(file).mode & 0o777, 0o644)
         const cfg = loadConfig(file)
@@ -112,7 +112,7 @@ test('init placeholders fail role validation', async t => {
         cwd:repo.dir, env:repo.env,
     })
     t.equal(result.code, 0)
-    const cfg = loadConfig(path.join(repo.dir, '.roast.json'))
+    const cfg = loadConfig(path.join(repo.dir, '.roast.jsonc'))
     for (const name of ['finder', 'verifier'] as const) {
         const err = thrown(() => validateRole(name,
             resolveRole(cfg, name, {})))
@@ -131,8 +131,8 @@ test('init writes in cwd and ignores state at the repository toplevel',
             cwd, env:repo.env,
         })
         t.equal(result.code, 0)
-        t.ok(fs.existsSync(path.join(cwd, '.roast.json')))
-        t.ok(!fs.existsSync(path.join(repo.dir, '.roast.json')))
+        t.ok(fs.existsSync(path.join(cwd, '.roast.jsonc')))
+        t.ok(!fs.existsSync(path.join(repo.dir, '.roast.jsonc')))
         t.equal(fs.readFileSync(path.join(repo.dir, '.gitignore'), 'utf8'),
             'existing\n/.roast/\n')
         t.ok(!fs.existsSync(path.join(cwd, '.gitignore')))
@@ -143,7 +143,7 @@ test('init outside Git writes nothing', async t => {
     t.cleanup(dir.remove)
     const result = await runRoast(['init'], { cwd:dir.dir, env:dir.env })
     t.equal(result.code, 2)
-    t.ok(!fs.existsSync(path.join(dir.dir, '.roast.json')))
+    t.ok(!fs.existsSync(path.join(dir.dir, '.roast.jsonc')))
     t.ok(!fs.existsSync(path.join(dir.dir, '.gitignore')))
 })
 
@@ -154,7 +154,7 @@ test('init schema reference points into the installed package', async t => {
         cwd:repo.dir, env:repo.env,
     })
     t.equal(result.code, 0)
-    const cfg = loadConfig(path.join(repo.dir, '.roast.json'))
+    const cfg = loadConfig(path.join(repo.dir, '.roast.jsonc'))
     t.ok(/^\.\/?node_modules\/@substrate-system\/roast\/[^/]+\.json$/
         .test(cfg.$schema ?? ''))
 })
@@ -218,7 +218,7 @@ test('init succeeds after three rejected keys and continues offering',
                 '--verifier-model', 'claude-opus-5-5',
             ])
         t.equal(result.code, 0)
-        t.ok(fs.existsSync(path.join(r.repo.dir, '.roast.json')))
+        t.ok(fs.existsSync(path.join(r.repo.dir, '.roast.jsonc')))
         t.ok(!fs.existsSync(r.project))
         t.ok(!fs.existsSync(r.user))
         t.deepEqual(r.server.credentials,
@@ -298,7 +298,7 @@ test('init prompts provider by number and accepts suggested model',
                 })
             t.equal(result.code, 0,
                 `exit 0 for provider ${p.name}`)
-            const file = path.join(repo.dir, '.roast.json')
+            const file = path.join(repo.dir, '.roast.jsonc')
             t.ok(fs.existsSync(file), 'config written')
             const cfg = loadConfig(file)
             const suggested = SUGGESTED_MODELS[
@@ -330,7 +330,7 @@ test('init prompts provider by name and accepts typed model',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             ANTHROPIC_API_KEY:'k',
@@ -361,7 +361,7 @@ test('init verifier default is otherProvider of finder choice',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const verifier = resolveRole(cfg, 'verifier', {
             OPENAI_API_KEY:'k',
@@ -385,7 +385,7 @@ test('init with --finder-model only prompts verifier',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             OPENAI_API_KEY:'k',
@@ -411,7 +411,7 @@ test('init with both model flags reads no stdin', async t => {
         })
     t.equal(result.code, 0)
     const cfg = loadConfig(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const finder = resolveRole(cfg, 'finder', {
         OPENAI_API_KEY:'k',
@@ -438,7 +438,7 @@ test('init without interactive terminals writes placeholders',
         t.ok(result.stderr.includes('--verifier-model'),
             'hint mentions --verifier-model')
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {})
         t.ok(finder.model.startsWith('<'),
@@ -457,7 +457,7 @@ test('init invalid menu choice then valid succeeds', async t => {
             cwd:repo.dir, env:repo.env, stdin,
         })
     t.equal(result.code, 0)
-    t.ok(fs.existsSync(path.join(repo.dir, '.roast.json')))
+    t.ok(fs.existsSync(path.join(repo.dir, '.roast.jsonc')))
 })
 
 test('init model mismatch then valid model succeeds',
@@ -476,7 +476,7 @@ test('init model mismatch then valid model succeeds',
         t.ok(result.stderr.includes(
             'does not place onto anthropic'))
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             ANTHROPIC_API_KEY:'k',
@@ -494,7 +494,7 @@ test('init EOF partway through writes nothing', async t => {
         ['init', '--no-login'], {
             cwd:repo.dir, env:repo.env, stdin,
         })
-    t.ok(!fs.existsSync(path.join(repo.dir, '.roast.json')),
+    t.ok(!fs.existsSync(path.join(repo.dir, '.roast.jsonc')),
         'no config written')
     t.ok(!fs.existsSync(path.join(repo.dir, '.gitignore')),
         'no gitignore')
@@ -506,7 +506,7 @@ test('init existing config rejected before any stdin read',
         t.cleanup(repo.remove)
         simulateTerminals(t, true)
         fs.writeFileSync(
-            path.join(repo.dir, '.roast.json'),
+            path.join(repo.dir, '.roast.jsonc'),
             '{"version":1}'
         )
         const result = await runRoast(['init'], {
@@ -589,7 +589,7 @@ test('init custom endpoint with key variable resolves correctly',
             })
         t.equal(result.code, 0, 'exit 0')
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             TIINY_KEY:'my-key',
@@ -622,7 +622,7 @@ test('init custom endpoint blank key variable uses role key var',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const rVar = roleKeyVar('finder')
         const finder = resolveRole(cfg, 'finder', {
@@ -652,7 +652,7 @@ test('init custom default protocol resolves as chat',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             MY_KEY:'k',
@@ -686,7 +686,7 @@ test('init both roles custom accepting verifier defaults',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             TIINY_KEY:'k',
@@ -723,7 +723,7 @@ test('init custom model with slash stays on custom endpoint',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             TIINY_KEY:'k',
@@ -753,7 +753,7 @@ test('init custom blank model writes placeholder', async t => {
         })
     t.equal(result.code, 0)
     const cfg = loadConfig(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const finder = resolveRole(cfg, 'finder', {
         MY_KEY:'k',
@@ -782,7 +782,7 @@ test('init invalid endpoint then valid succeeds', async t => {
         })
     t.equal(result.code, 0)
     const cfg = loadConfig(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const finder = resolveRole(cfg, 'finder', {
         MY_KEY:'k',
@@ -811,7 +811,7 @@ test('init invalid key variable then valid succeeds',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             GOOD_KEY:'k',
@@ -843,7 +843,7 @@ test('init custom model rejects whitespace and control chars',
             })
         t.equal(result.code, 0, 'succeeds after valid input')
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const finder = resolveRole(cfg, 'finder', {
             MY_KEY:'k',
@@ -893,7 +893,7 @@ test('init trust offer yes approves custom config', async t => {
         })
     t.equal(result.code, 0)
     const cfg = loadConfig(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const p = trustProjection(cfg)
     t.ok(requiresApproval(p), 'config needs approval')
@@ -925,7 +925,7 @@ test('init trust offer no leaves unapproved', async t => {
         })
     t.equal(result.code, 0)
     const cfg = loadConfig(
-        path.join(repo.dir, '.roast.json')
+        path.join(repo.dir, '.roast.jsonc')
     )
     const p = trustProjection(cfg)
     t.ok(requiresApproval(p), 'config needs approval')
@@ -954,7 +954,7 @@ test('init openrouter suggests opposite vendor from other role',
             })
         t.equal(result.code, 0)
         const cfg = loadConfig(
-            path.join(repo.dir, '.roast.json')
+            path.join(repo.dir, '.roast.jsonc')
         )
         const verifier = resolveRole(cfg, 'verifier', {
             OPENROUTER_API_KEY:'k',
@@ -978,7 +978,7 @@ test('init builtin-only config gets no trust offer', async t => {
             cwd:repo.dir, env:repo.env, stdin,
         })
     t.equal(result.code, 0, 'exits 0')
-    const file = path.join(repo.dir, '.roast.json')
+    const file = path.join(repo.dir, '.roast.jsonc')
     t.ok(fs.existsSync(file), 'config written')
     const cfg = loadConfig(file)
     const p = trustProjection(cfg)
@@ -1008,7 +1008,7 @@ test('init EOF at trust offer leaves config not approved',
                 cwd:repo.dir, env:repo.env, stdin,
             })
         t.equal(result.code, 0, 'exits 0')
-        const file = path.join(repo.dir, '.roast.json')
+        const file = path.join(repo.dir, '.roast.jsonc')
         t.ok(fs.existsSync(file), 'config written')
         const cfg = loadConfig(file)
         const p = trustProjection(cfg)

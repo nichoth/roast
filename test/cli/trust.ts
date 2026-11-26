@@ -52,7 +52,7 @@ function repoWith (t:CleanupTest, cfg:unknown):TempDir {
     const r = tempRepo()
     t.cleanup(r.remove)
     const body = typeof cfg === 'string' ? cfg : JSON.stringify(cfg)
-    fs.writeFileSync(path.join(r.dir, '.roast.json'), body)
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), body)
     return r
 }
 
@@ -134,7 +134,7 @@ test('trust summary escapes control characters', async t => {
 test('trust usage errors exit 2', async t => {
     const outside = tempDir()
     t.cleanup(outside.remove)
-    fs.writeFileSync(path.join(outside.dir, '.roast.json'),
+    fs.writeFileSync(path.join(outside.dir, '.roast.jsonc'),
         JSON.stringify(CUSTOM))
     const res = await runRoast(['trust', '--yes'],
         { cwd:outside.dir, env:outside.env })

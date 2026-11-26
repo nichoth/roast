@@ -40,7 +40,7 @@ _Avoid_: pre-commit check, hook
 ### Configuration
 
 **Project config**:
-The `.roast.json` file (JSONC) nearest the working directory, searched upward
+The `.roast.jsonc` file (JSONC) nearest the working directory, searched upward
 no further than the Git toplevel. It is the single home for every non-secret
 setting.
 _Avoid_: repo config, local config, rc file

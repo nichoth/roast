@@ -45,17 +45,14 @@ export function gateRepo (t:CleanupTest, toplevelConfig = true):GateRepo {
     const base = tempRepo('roast-gate-')
     t.cleanup(base.remove)
     const env = { ...base.env, ...ISOLATED_GIT }
-    for (const [k, v] of [
-        ['maintenance.auto', 'false'],
-        ['gc.auto', '0'],
-        ['user.email', 'roast-test@example.com'],
-        ['user.name', 'roast test'],
-        ['commit.gpgsign', 'false'],
-    ]) {
-        git(base.dir, env, 'config', k, v)
-    }
+    fs.appendFileSync(path.join(base.dir, '.git', 'config'),
+        '\n[maintenance]\n\tauto = false\n' +
+        '[gc]\n\tauto = 0\n' +
+        '[user]\n\temail = roast-test@example.com\n' +
+        '\tname = roast test\n' +
+        '[commit]\n\tgpgsign = false\n')
     if (toplevelConfig) {
-        fs.writeFileSync(path.join(base.dir, '.roast.json'), '{"version": 1}')
+        fs.writeFileSync(path.join(base.dir, '.roast.jsonc'), '{"version": 1}')
     }
     const hooks = path.join(base.dir, '.git', 'hooks')
     return {

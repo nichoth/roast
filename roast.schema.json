@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/nichoth/roast/roast.schema.json",
-  "title": "Roast project config (.roast.json)",
+  "title": "Roast project config (.roast.jsonc)",
   "description": "Every non-secret Roast setting. Credentials come only from environment variables; a profile names its variable with api_key_env.",
   "type": "object",
   "properties": {

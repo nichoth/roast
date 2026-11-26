@@ -21,7 +21,7 @@ finder and Codex as the verifier has to hand-edit the roles after `init`.
 ## Non-goals
 
 - Providers other than OpenAI and Anthropic. They need a custom endpoint, and
-  so trust approval; users edit `.roast.json` for those.
+  so trust approval; users edit `.roast.jsonc` for those.
 - New CLI flags (`--finder-provider` etc.).
 - Warning when both roles use the same model family.
 
@@ -38,7 +38,7 @@ finder and Codex as the verifier has to hand-edit the roles after `init`.
 2. `--finder-provider` / `--verifier-provider` flags. Explicit, but four
    flags for the common case and still lets a user write a mismatched config.
 3. Both. Most flexible, most CLI surface; not needed while the error message
-   points to `.roast.json`.
+   points to `.roast.jsonc`.
 
 ## Design
 
@@ -47,7 +47,7 @@ finder and Codex as the verifier has to hand-edit the roles after `init`.
   - model given: `InferFamily(model)`; `openai` or `anthropic` is used,
     anything else (including an empty family) is a usage error naming the
     flag and model, saying `init` writes only OpenAI and Anthropic profiles
-    and to edit `.roast.json` for other providers.
+    and to edit `.roast.jsonc` for other providers.
   - model omitted: placeholder model, on the provider the other role does
     not use. With both omitted, finder is `openai`, verifier `anthropic`.
 - Profiles: one per distinct (provider, model) pair, in finder-then-verifier
@@ -77,7 +77,7 @@ finder and Codex as the verifier has to hand-edit the roles after `init`.
   role's model reaches, with roles in both orders (Claude finder / OpenAI
   verifier, and the reverse). Its model IDs change from `a`/`b` to IDs
   `InferFamily` can place.
-- An unplaceable model is a usage error and leaves no `.roast.json`.
+- An unplaceable model is a usage error and leaves no `.roast.jsonc`.
 - Placeholder pairing when one or both flags are omitted.
 - Same-provider cases parse with `config.Load` and resolve each role to the
   expected model.

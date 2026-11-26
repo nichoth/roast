@@ -155,7 +155,7 @@ if [ -n "$watchdog_pid" ]; then
 fi
 
 if [ -f "$work/timed-out" ]; then
-  warn "review timed out after ${timeout_s}s; commit allowed WITHOUT review (raise gate.timeout_seconds in .roast.json)"
+  warn "review timed out after ${timeout_s}s; commit allowed WITHOUT review (raise gate.timeout_seconds in .roast.jsonc)"
   exit 0
 fi
 

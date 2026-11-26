@@ -14,7 +14,7 @@ import { EXAMPLE_CONFIGS } from './examples.js'
 function tempConfig (t:CleanupTest, text:string):string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roast-load-'))
     t.cleanup(() => fs.rmSync(dir, { recursive:true, force:true }))
-    const file = path.join(dir, '.roast.json')
+    const file = path.join(dir, '.roast.jsonc')
     fs.writeFileSync(file, text)
     return file
 }
@@ -95,7 +95,7 @@ test('loadConfig rejects invalid documents', t => {
 test('a missing file is an error', t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roast-load-'))
     t.cleanup(() => fs.rmSync(dir, { recursive:true, force:true }))
-    t.throws(() => loadConfig(path.join(dir, '.roast.json')),
+    t.throws(() => loadConfig(path.join(dir, '.roast.jsonc')),
         /open config/, 'missing file')
 })
 

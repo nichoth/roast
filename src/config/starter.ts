@@ -122,7 +122,7 @@ export class UnplaceableModelError extends Error {
             `Anthropic model ID (${SUGGESTED_MODELS.anthropic})` +
             ', or OpenRouter\'s <vendor>/<model> form ' +
             `(${SUGGESTED_MODELS.openrouter[0]}). For another` +
-            ' provider, edit inference_profiles in .roast.json'
+            ' provider, edit inference_profiles in .roast.jsonc'
         )
         this.role = role
         this.model = model

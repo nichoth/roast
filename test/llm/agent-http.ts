@@ -10,6 +10,7 @@ import {
 import { createClient, createModelClient } from '../../src/llm/client.js'
 import type { LlmError } from '../../src/llm/errors.js'
 import { hasSentinel } from '../../src/llm/errors.js'
+import { defaultSleep, type Sleep } from '../../src/llm/retry.js'
 import type { ClientConfig } from '../../src/llm/types.js'
 import {
     failure,
@@ -68,9 +69,13 @@ function toolCall (name:string, args:unknown, id = 'call-1') {
     }, 'tool_calls')
 }
 
-function client (url:string, over:Partial<ClientConfig> = {}) {
+function client (
+    url:string,
+    over:Partial<ClientConfig> = {},
+    sleep:Sleep = async () => {}
+) {
     return createClient(createModelClient(cfg(url, over)), {
-        sleep:async () => {},
+        sleep,
     })
 }
 
@@ -162,6 +167,28 @@ test('http: one session ID per conversation', async t => {
         t.equal((r.body as Record<string, unknown>).tool_choice, 'auto',
             'thinking-mode model gets automatic tool choice')
     }
+})
+
+test('http: cancellation during a provider-directed retry delay', async t => {
+    const s = await server(t, (_req, n) => n === 0 ? {
+        status:503,
+        headers:{ 'retry-after-ms':'1' },
+        body:'{"error":{"message":"busy"}}',
+    } : { stream:toolCall('submit', { summary:'ok' }) })
+    const controller = new AbortController()
+    const reason = new Error('cancel during retry')
+    const delays:number[] = []
+    const c = client(s.url, { maxAttempts:2 }, async (ms, retrySignal) => {
+        delays.push(ms)
+        const pending = defaultSleep(ms, retrySignal)
+        controller.abort(reason)
+        await pending
+    })
+    const err = await failure(c.converse('sys', 'user',
+        options([finalTool()], { maxTurns:1 }), controller.signal))
+    t.equal(err, reason, 'returns the cancellation reason')
+    t.deepEqual(delays, [1], 'uses the provider retry delay')
+    t.equal(s.requests.length, 1, 'does not send another request')
 })
 
 test('http: a call buffered before a request timeout is never run',

@@ -11,6 +11,8 @@ import { git } from '../../src/git/git.js'
 import { startInferenceServer } from '../helpers/inference-server.js'
 import { doctorProbe, probeCall } from '../helpers/doctor-probe.js'
 import { providerServer } from '../helpers/provider-server.js'
+import { doctorHooks } from '../../src/cli/doctor.js'
+import { CancelledError } from '../../src/cli/errors.js'
 
 const BUILTIN = {
     version:1,
@@ -29,7 +31,7 @@ function doctorRepo (t:CleanupTest):TempDir {
     delete r.env.NODE_USE_ENV_PROXY
     r.env.ROAST_FINDER_API_KEY = 'finder-test-key'
     r.env.ROAST_VERIFIER_API_KEY = 'verifier-test-key'
-    fs.writeFileSync(path.join(r.dir, '.roast.json'),
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
         JSON.stringify(BUILTIN))
     return r
 }
@@ -65,7 +67,7 @@ test('doctor keeps all local checks after missing or invalid config',
         t.cleanup(() => { skillHooks.lookPath = original })
         const project = await projectCredentialsPath(r.dir, { env:r.env })
         await saveCredential(project, 'openai', 'secret', new Date())
-        fs.unlinkSync(path.join(r.dir, '.roast.json'))
+        fs.unlinkSync(path.join(r.dir, '.roast.jsonc'))
         const missing = await doctor(r)
         t.equal(missing.code, 4, 'missing config fails')
         t.deepEqual(missing.rows.map(x => x.name), [
@@ -73,7 +75,7 @@ test('doctor keeps all local checks after missing or invalid config',
             'project-credentials', 'proxy-env', 'agents-skill', 'claude-skill',
         ], 'local checks remain in order')
         t.equal(missing.rows[1].status, 'fail', 'config-file failure')
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), '{')
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), '{')
         const invalid = await doctor(r)
         t.equal(invalid.code, 4, 'invalid config fails')
         t.equal(invalid.rows.find(x => x.name === 'config')?.status,
@@ -118,7 +120,7 @@ test('doctor checks gate health and only user-level skill installations',
         t.cleanup(outside.remove)
         outside.env.ROAST_FINDER_API_KEY = 'finder-test-key'
         outside.env.ROAST_VERIFIER_API_KEY = 'verifier-test-key'
-        fs.writeFileSync(path.join(outside.dir, '.roast.json'),
+        fs.writeFileSync(path.join(outside.dir, '.roast.jsonc'),
             JSON.stringify(BUILTIN))
         const out = await doctor(outside)
         t.equal(out.code, 0, 'outside repository only warns')
@@ -199,7 +201,7 @@ test('doctor requires clone approval for custom endpoints', async t => {
     const r = doctorRepo(t)
     t.equal((await doctor(r)).rows.find(x =>
         x.name === 'config-trust')?.status, 'pass', 'built-in needs none')
-    fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+    fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
         ...BUILTIN,
         inference_profiles:{
             o:{
@@ -260,7 +262,7 @@ test('doctor probes models with each role protocol and no key in output',
         r.env.ROAST_FINDER_API_KEY = 'finder-private-key'
         r.env.ROAST_VERIFIER_API_KEY = 'verifier-private-key'
         for (const protocol of ['chat', 'responses', 'anthropic']) {
-            fs.writeFileSync(path.join(r.dir, '.roast.json'),
+            fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
                 JSON.stringify({
                     ...BUILTIN,
                     inference_profiles:{
@@ -367,17 +369,24 @@ test('doctor refuses redirects without sending the key to their target',
         t.equal(target.requests.length, 0, 'redirect target never contacted')
     })
 
-test('doctor bounds a models request to five seconds and continues',
+test('doctor times out a models request and continues',
     async t => {
         const r = doctorRepo(t)
         const probe = doctorProbe()
+        const deadline = new AbortController()
+        const original = doctorHooks.timeout
+        let first = true
+        doctorHooks.timeout = ms => {
+            if (ms !== 5000 || !first) return original(ms)
+            first = false
+            return deadline.signal
+        }
+        t.cleanup(() => { doctorHooks.timeout = original })
         const server = await startInferenceServer((req, n) => {
             if (req.method === 'POST') return probe(req, n)
             if (n > 0) return { status:200 }
-            return res => {
-                // A reply after the specified deadline must not pass.
-                const timer = setTimeout(() => res.end('{}'), 5500)
-                res.on('close', () => clearTimeout(timer))
+            return () => {
+                deadline.abort(new DOMException('deadline', 'TimeoutError'))
             }
         })
         t.cleanup(server.close)
@@ -385,9 +394,49 @@ test('doctor bounds a models request to five seconds and continues',
         t.equal(res.code, 4, 'timeout fails doctor')
         t.equal(res.rows.find(x => x.name === 'finder-endpoint')?.status,
             'fail', 'finder request times out')
+        t.ok(res.rows.find(x => x.name === 'finder-endpoint')?.detail
+            .includes('deadline'), 'timeout appears in the diagnostic')
         t.equal(res.rows.find(x => x.name === 'verifier-endpoint')?.status,
             'pass', 'verifier still runs')
     })
+
+test('doctor preserves probe deadlines for both roles', async t => {
+    const r = doctorRepo(t)
+    const deadlines:number[] = []
+    const original = doctorHooks.timeout
+    doctorHooks.timeout = ms => {
+        deadlines.push(ms)
+        return original(ms)
+    }
+    t.cleanup(() => { doctorHooks.timeout = original })
+    const res = await doctor(r)
+    t.equal(res.code, 0, 'both roles complete their probes')
+    t.deepEqual(deadlines, [5000, 35000, 5000, 35000],
+        'models and roundtrip deadlines remain unchanged')
+})
+
+test('doctor cancellation closes the pending models request', async t => {
+    const r = doctorRepo(t)
+    const controller = new AbortController()
+    let closed!:() => void
+    const connectionClosed = new Promise<void>(resolve => { closed = resolve })
+    const server = await startInferenceServer(() => res => {
+        res.on('close', closed)
+        controller.abort(new CancelledError())
+    })
+    t.cleanup(server.close)
+    const res = await runRoast(['doctor', '--json'], {
+        cwd:r.dir,
+        env:r.env,
+        redirectTo:server.url,
+        signal:controller.signal,
+    })
+    await connectionClosed
+    t.equal(res.code, 5, 'cancellation exits 5')
+    t.ok(res.stderr.includes('cancelled'), 'cancellation is reported')
+    t.equal(res.stdout, '', 'no partial doctor results are emitted')
+    t.equal(server.requests.length, 1, 'no further probes are sent')
+})
 
 test('doctor withholds ambient keys from a custom finder independently',
     async t => {
@@ -396,7 +445,7 @@ test('doctor withholds ambient keys from a custom finder independently',
         t.cleanup(server.close)
         delete r.env.ROAST_FINDER_API_KEY
         r.env.OPENAI_API_KEY = 'ambient-key-must-stay-home'
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
             ...BUILTIN,
             inference_profiles:{
                 custom:{ model:'m', endpoint:'https://gateway.example/v1' },
@@ -465,7 +514,7 @@ test('doctor skips invalid profiles while retaining later diagnostics',
         const server = await providerServer(doctorProbe())
         t.cleanup(server.close)
         for (const model of ['', '<finder-model>']) {
-            fs.writeFileSync(path.join(r.dir, '.roast.json'),
+            fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
                 JSON.stringify({
                     ...BUILTIN, inference_profiles:{ o:{ model } },
                 }))
@@ -476,7 +525,7 @@ test('doctor skips invalid profiles while retaining later diagnostics',
                 ['verifier-credential', 'pass'], ['verifier-profile', 'fail'],
             ], 'validation failure skips endpoint checks')
         }
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
             ...BUILTIN, roles:{},
         }))
         const res = await doctor(r, [], server.url)
@@ -494,7 +543,7 @@ test('doctor makes no requests until custom endpoint trust is current',
         const server = await startInferenceServer((req, n) =>
             req.method === 'POST' ? probe(req, n) : { status:200 })
         t.cleanup(server.close)
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
             ...BUILTIN,
             inference_profiles:{
                 o:{ protocol:'chat', model:'m', endpoint:server.url + '/v1' },
@@ -616,7 +665,7 @@ test('doctor rejects a changed lookup token on the final turn', async t => {
 test('doctor sends the configured session header on both chat turns',
     async t => {
         const r = doctorRepo(t)
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), JSON.stringify({
             ...BUILTIN,
             inference_profiles:{
                 o:{
@@ -689,7 +738,7 @@ for (const [protocol, endpoint] of [
     test(`doctor ${protocol} roundtrip uses two turns with a stable prefix`,
         async t => {
             const r = doctorRepo(t)
-            fs.writeFileSync(path.join(r.dir, '.roast.json'),
+            fs.writeFileSync(path.join(r.dir, '.roast.jsonc'),
                 JSON.stringify({
                     ...BUILTIN,
                     inference_profiles:{ o:{ protocol, model:'m' } },

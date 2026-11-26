@@ -72,7 +72,7 @@ npm i -D @substrate-system/roast
 npx roast init
 ```
 
-This writes `.roast.json` in the current directory and adds `/.roast/` to
+This writes `.roast.jsonc` in the current directory and adds `/.roast/` to
 `.gitignore`. Model flags route each role by its model ID:
 
 - a bare Claude model ID (`claude-opus-5-5`) uses Anthropic's Messages API
@@ -94,11 +94,11 @@ to `chat`; a blank credential variable uses the role's key variable unless
 a previous custom choice supplies the default. A blank model leaves a
 placeholder to edit. A custom model ID stays on the chosen
 endpoint, even when it has a slash. You can also configure a custom profile
-by editing `.roast.json` (see [Project config](#project-config)).
+by editing `.roast.jsonc` (see [Project config](#project-config)).
 
 Without an interactive terminal, `init` writes placeholder model IDs for
 missing model flags and prints a hint naming those flags. Before a review,
-replace the models needed by that review in `.roast.json` or supply them with
+replace the models needed by that review in `.roast.jsonc` or supply them with
 review flags. For example, `npx roast review --finder-model MODEL --no-verify`
 does not need a verifier model. Init model flags use the routing above;
 configure a custom endpoint interactively or in project config.
@@ -128,7 +128,7 @@ npx roast init --finder-model 'claude-opus-5-5' \
   --verifier-model 'gpt-6.1-terra'
 ```
 
-`init` refuses to overwrite an existing `.roast.json`.
+`init` refuses to overwrite an existing `.roast.jsonc`.
 
 
 ### 3. Login
@@ -139,7 +139,7 @@ If you skipped login for a built-in provider during `init`, log in now:
 npx roast login
 ```
 
-With no argument, `login` reads `.roast.json` and logs in to each built-in
+With no argument, `login` reads `.roast.jsonc` and logs in to each built-in
 provider that has no credentials yet. For Anthropic and OpenAI,
 it opens the provider's API-keys page. Create a key and paste it into the
 hidden prompt. For OpenRouter, it opens OpenRouter in your browser and
@@ -232,12 +232,16 @@ installed Roast version.
 
 ### Project config
 
-Every setting except credentials lives in `.roast.json` (JSONC: comments and
-trailing commas are allowed). Roast looks for it in the working directory and
-then in each parent directory, stopping at the Git toplevel; the first one
-found wins, and files are never merged. `--config <path>` names a different
-file. When there is no project config, Roast exits with an error telling you
-to run `npx roast init`. There are no built-in default models.
+Every setting except credentials goes in `.roast.jsonc`
+(JSONC: comments and trailing commas are allowed). Roast looks for it in the
+working directory and then in each parent directory, stopping at the Git
+toplevel; the first one found wins, and files are never merged.
+`--config <path>` names a different file. When there is no project config,
+Roast exits with an error telling you to run `npx roast init`.
+There are no built-in default models.
+
+If your project has an existing `.roast.json`, rename it to
+`.roast.jsonc` so Roast can discover it automatically.
 
 ```jsonc
 {
@@ -321,7 +325,7 @@ and a stored key is never sent there. Neither follows a role that an
 override moved off its provider's endpoint. A profile may explicitly name
 a provider key variable for a custom endpoint, subject to trust approval.
 A stored key is matched to a role only by that endpoint and protocol, never
-by anything `.roast.json` names. A custom endpoint needs
+by anything `.roast.jsonc` names. A custom endpoint needs
 `api_key_env` or a role key (`ROAST_FINDER_API_KEY` or
 `ROAST_VERIFIER_API_KEY`). `npx roast doctor` reports which source each role
 used, including a stored key and its scope, and names a provider key it
@@ -333,7 +337,7 @@ withheld.
 reviews and the pre-commit gate find it without an environment variable.
 
 ```sh
-npx roast login                       # every provider .roast.json needs
+npx roast login                       # every provider .roast.jsonc needs
 npx roast login anthropic             # one provider: anthropic, openai,
                                       # or openrouter
 npx roast login openrouter --global   # store for your user, not the project
@@ -343,7 +347,7 @@ npx roast logout --global             # remove every user-scope key
 ```
 
 With no argument, `login` logs in to each built-in provider that the roles
-in `.roast.json` use and that has no credential yet; it does nothing when
+in `.roast.jsonc` use and that has no credential yet; it does nothing when
 every role already has one. With a provider argument, it always runs and
 replaces any key stored for that provider in the chosen scope. Login needs
 an interactive terminal.
@@ -453,7 +457,7 @@ under `inference_profiles`:
 | `interactive.min_files`, `interactive.min_diff_lines` | `4`, `80` | Below both sizes, an `--interactive` review uses a single structured finder call. `0` disables the threshold. |
 | `roles.finder.pin` | `false` | Ignore `author_routes` even when the author shares the finder's model family. |
 | `inference_profiles.<name>.session_header` | none | Also send the per-conversation session ID under this header name, for gateways that key sessions on their own header (for example `x-opencode-session`). It must be a valid header name and cannot name a credential or framing header, or one Roast or the provider SDK sets. |
-| `prompts.finder_code`, `prompts.finder_prose`, `prompts.verifier` | built in | Paths to prompt overrides; a relative path is relative to the directory holding `.roast.json`. |
+| `prompts.finder_code`, `prompts.finder_prose`, `prompts.verifier` | built in | Paths to prompt overrides; a relative path is relative to the directory holding `.roast.jsonc`. |
 
 The `limits` and `gate` sections are described under
 [Resource limits](#resource-limits) and [Pre-commit gate](#pre-commit-gate).
@@ -480,11 +484,10 @@ npx roast review
 
 ## Trust
 
-Because `.roast.json` is committed, a repository you clone could point a
+Because `.roast.jsonc` is committed, a repository you clone could point a
 profile at an evil endpoint, or name your provider key as its
 credential. Roast therefore **asks you to approve the security-relevant parts**
-**of a project config once per clone**, before it sends code or credentials
-anywhere the config names.
+**of a project** before it sends code or credentials anywhere.
 
 A config needs no approval when every selected profile uses a built-in
 provider's endpoint (OpenAI, Anthropic, or OpenRouter) with a protocol that
@@ -512,6 +515,8 @@ clone, delete `.git/roast/trust.json`. `npx roast doctor` reports whether the
 config needs approval and whether it has it. There is no environment variable
 that bypasses trust. The [security model](docs/security-model.md) explains the
 design.
+
+## Commands
 
 ## Use
 
@@ -564,7 +569,7 @@ this clone has not approved. `--json` gives machine-readable output.
 ## Resource limits
 
 Defaults are generous enough for slow local models.
-Change the `limits` section of `.roast.json` to adjust.
+Change the `limits` section of `.roast.jsonc` to adjust.
 Durations are strings such as `"90s"` or `"10m"`.
 
 | Control | Default | Override |
@@ -668,7 +673,7 @@ the locally installed `roast`, not a `roast` on your
 missing `node_modules/.bin/roast`, an unapproved config, failed inference,
 empty output, or a timeout prints a warning and allows the commit.
 
-The hook runs from the Git toplevel and loads the `.roast.json` there, so
+The hook runs from the Git toplevel and loads the `.roast.jsonc` there, so
 `npx roast gate enable` refuses, and a review does not offer the gate, when
 the project config lives only in a subdirectory.
 

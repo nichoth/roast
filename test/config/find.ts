@@ -13,7 +13,7 @@ function mkTemp (t:{ cleanup (fn:() => void):void }):string {
 
 function writeConfig (dir:string):string {
     fs.mkdirSync(dir, { recursive:true })
-    const file = path.join(dir, '.roast.json')
+    const file = path.join(dir, '.roast.jsonc')
     fs.writeFileSync(file, '{"version": 1}\n')
     return file
 }
@@ -37,10 +37,10 @@ test('findConfig walks up no further than the stop directory', t => {
     t.equal(findConfig(sub, top), nearer, 'the nearest config wins')
 })
 
-test('findConfig skips a directory named .roast.json', t => {
+test('findConfig skips a directory named .roast.jsonc', t => {
     const root = fs.realpathSync(mkTemp(t))
     const sub = path.join(root, 'sub')
-    fs.mkdirSync(path.join(sub, '.roast.json'), { recursive:true })
+    fs.mkdirSync(path.join(sub, '.roast.jsonc'), { recursive:true })
     const file = writeConfig(root)
     t.equal(findConfig(sub, root), file,
         'the directory is skipped and the parent config is found')
@@ -63,7 +63,7 @@ test('findConfig stops at a realpath toplevel through a symlink', t => {
 
     const atTop = writeConfig(real)
     t.equal(findConfig(path.join(link, 'sub'), real),
-        path.join(link, '.roast.json'),
+        path.join(link, '.roast.jsonc'),
         'the toplevel config is found, spelled through the symlink')
     t.ok(fs.existsSync(atTop))
 })

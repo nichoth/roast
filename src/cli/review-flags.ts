@@ -98,7 +98,7 @@ export function describeReviewFlags (
 ):Record<string, string> {
     const l = d.limits
     const out:Record<string, string> = {
-        config:'Project config path (default: nearest .roast.json up ' +
+        config:'Project config path (default: nearest .roast.jsonc up ' +
             'to the Git toplevel)',
         base:'Diff base ref',
         'uncommitted-only':'Review only uncommitted changes',

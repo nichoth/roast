@@ -69,7 +69,7 @@ test('the entry exits 2 on a Node version below 22.18', async t => {
 test('the bundle reads a commented config for gate settings', async t => {
     const repo = tempRepo()
     try {
-        await writeFile(join(repo.dir, '.roast.json'), GATE_EXAMPLE)
+        await writeFile(join(repo.dir, '.roast.jsonc'), GATE_EXAMPLE)
         const res = await run(process.execPath, [CLI, 'gate', 'settings'],
             { cwd:repo.dir, env:repo.env })
         t.equal(res.code, 0, `exits 0 ${res.stderr}`)

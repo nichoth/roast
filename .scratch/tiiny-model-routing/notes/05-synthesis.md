@@ -216,7 +216,7 @@ Concrete boundaries behind the table:
   routing must define how it composes with those semantics. The Go
   counterparts are in `internal/config/config.go`; don't invent a
   six-tier default where missing Roast roles currently fail explicitly.
-- **Config:** prospective non-secret settings belong in `.roast.json`,
+- **Config:** prospective non-secret settings belong in `.roast.jsonc`,
   through `src/config/schema.ts`, `src/config/load.ts`,
   `src/config/json-schema.ts`, and corresponding Go config. The published
   `roast.schema.json` is generated. Upstream Hermes YAML and its variable

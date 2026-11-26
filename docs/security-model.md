@@ -6,7 +6,7 @@ it is not a promise that a model or provider will handle untrusted input safely.
 
 ## Trusted configuration
 
-Every non-secret setting comes from the project config, `.roast.json`, which
+Every non-secret setting comes from the project config, `.roast.jsonc`, which
 is committed with the code; credentials come from environment variables or
 from stored credentials outside the repository, and the project config may
 name a credential variable but never hold a credential. Roast is installed as a project dependency, so the repository's
@@ -57,7 +57,7 @@ is no environment-variable bypass for trust.
 ## Configuration templates
 
 Roast no longer installs configuration templates from a URL. A team shares its
-configuration by committing `.roast.json`, which every clone then approves
+configuration by committing `.roast.jsonc`, which every clone then approves
 under the per-clone trust described above. An organization that wants a
 common configuration can publish a starter file for teams to copy into their
 repositories; once copied, it is an ordinary project config and is approved,

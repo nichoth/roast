@@ -1,4 +1,4 @@
-// The zod schema of .roast.json: the single source of truth for its
+// The zod schema of .roast.jsonc: the single source of truth for its
 // shape, its types, and the editor schema (roast.schema.json, rendered by
 // json-schema.ts). Range checks and cross-field rules run later as plain
 // functions in load.ts, so their order and messages match Go.

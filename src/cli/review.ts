@@ -95,15 +95,17 @@ import {
 } from './snapshot-meta.js'
 import { deleteSnapshot, pinWorktree } from '../snapshot/snapshot.js'
 import { requireTrust } from './trust.js'
+import type { Sleep } from '../llm/retry.js'
 
 const INTERACTIVE_MIN_DIFF_LINES = 80
 const INTERACTIVE_MIN_FILES = 4
 const VERIFIER_MAX_TURNS = 8
 const VERIFIER_SNIPPET_BYTES = 60_000
 
-// Swappable for tests: the snapshot area's functions.
+// Swappable dependencies for in-process review tests.
 export const reviewHooks:{
     snapshot:((ctx:RunContext) => SnapshotDeps)|null;
+    sleep?:Sleep;
 } = { snapshot:null }
 
 // Exit selection after a completed run (spec 01, 2.2): a finalize
@@ -178,7 +180,9 @@ function newClient (
     config:ClientConfig,
     ledger:Ledger|null
 ):Client {
-    return createClient(createModelClient(config), { ledger })
+    return createClient(createModelClient(config), {
+        ledger, sleep:reviewHooks.sleep,
+    })
 }
 
 type Format = 'json'|'markdown'|'both'

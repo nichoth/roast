@@ -1,0 +1,1582 @@
+Reading prompt from stdin...
+OpenAI Codex v0.172.0
+--------
+workdir: /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+model: gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: none
+session id: 01a2193f-72d2-7d40-906c-e792247a4fbc
+--------
+user
+---- SPEC CONTEXT ----
+# Make the test suite substantially faster
+
+**Status:** ready-for-agent
+
+## Problem Statement
+
+Developers wait too long for feedback from the test suite. A measured
+local run took 143.6 seconds for 974 test cases and 7,694 assertions.
+The suite runs cases serially, exercises many real Git repositories and
+subprocesses, and waits for production timeouts and retry backoff. Much
+of that coverage is useful, but elapsed time is not itself evidence of
+correct behavior.
+
+The full suite needs to remain a trustworthy release and CI gate while
+developers get substantially faster feedback. Fast focused checks should
+also remain available during development.
+
+## Solution
+
+Run independent test groups concurrently in isolated processes, and
+replace unnecessary real-time waits with controllable test dependencies.
+Preserve behavioral coverage, including representative real Git, gate,
+HTTP, timeout, cancellation, and subprocess integration tests.
+
+Keep the existing full-suite command and CI gate reliable. Measure the
+result against the current serial baseline on the same machine. Aim for
+at least a 50% reduction in full-suite wall time; report actual results
+and any machine or resource constraints rather than making a fragile
+timing assertion part of the ordinary test suite.
+
+## Implementation Decisions
+
+- Keep the TypeScript package and existing CI gate. The full test command
+  still builds the CLI before tests that execute it, runs the complete
+  non-live suite, and returns a nonzero status on failure.
+- Partition the suite into independent groups that execute in separate
+  Node processes with bounded concurrency. Preserve test discovery and
+  ensure every existing case is included exactly once. A group must not
+  mutate another group's bundle or other shared generated artifacts.
+- Provide readable results for each group, with failures, crashes,
+  incomplete output, and nonzero child exits reliably propagated. Avoid
+  interleaving that makes diagnostics impossible to associate with a
+  group. Preserve the test pipeline's existing failure semantics.
+- Make focused test invocations safe to run concurrently, including
+  independent temporary bundle paths and cleanup. Preserve their existing
+  command-line interface and nonzero failure behavior.
+- Prefer existing dependency injection for sleep and test fakes. Where
+  end-to-end orchestration lacks a suitable seam, add the smallest
+  practical seam at a high boundary. Preserve production retry delays,
+  timeout values, cancellation, and command behavior.
+- Replace avoidable real waits, especially the interrupted inference
+  stream's retry and the doctor timeout, with deterministic control over
+  the relevant delay or signal. Keep representative real-clock tests
+  where they prove integration with actual timers or subprocesses.
+- Investigate the slow gate and Git fixtures with measurements; reduce
+  redundant setup where isolation and behavior allow it. Do not remove a
+  distinct behavioral scenario solely to improve the timing.
+- Keep all tests isolated from user configuration, credentials, and the
+  checkout. Account for process-wide working directories, temporary Git
+  repositories, local HTTP listeners, and cleanup on failure.
+- Use bounded concurrency appropriate to available resources and expose a
+  way to reduce it for constrained or diagnostic environments.
+- Document the commands, worker control, focused-run guarantees, and
+  how to reproduce the timing comparison in contributor documentation.
+
+## Testing Decisions
+
+- A good test verifies observable behavior at the highest practical seam,
+  not private worker scheduling, a specific partition layout, or the
+  implementation of a test double.
+- Exercise the full test command with controlled fixture groups to prove
+  complete execution, isolation, attributable output, and failure
+  propagation for failed assertions, crashes, and incomplete output.
+  Existing test-pipeline command tests provide prior art.
+- Exercise simultaneous focused commands using distinct fixtures, and
+  verify that each reports its own result and exit status. Existing
+  focused-command tests provide prior art.
+- Exercise retry and timeout behavior at existing agent, CLI, and HTTP
+  seams with controlled delays. Verify retry requests, delay decisions,
+  cancellation, and resulting observable outcomes. Existing injected
+  sleep and local inference-server tests provide prior art.
+- Retain representative integration tests using actual Git, gate
+  subprocesses, HTTP, timers, and signals. Preserve assertions about
+  reviewed content, fail-open behavior, and cleanup.
+- Compare repeated full-suite wall times before and after on the same
+  machine and configuration. Report the worker count, test and assertion
+  totals, results, and any variance. Verify the complete CI gate and
+  repeat parallel runs to detect interference; timing is a benchmark,
+  not a hard-coded assertion in the normal test suite.
+
+## Out of Scope
+
+- Changing Roast's production retry, timeout, gate, or review semantics.
+- Deleting meaningful coverage or making live provider tests mandatory.
+- Rewriting the project in another language or replacing the package
+  architecture.
+- Guaranteeing an absolute runtime on every machine or claiming the full
+  integration suite will be instant.
+
+## Further Notes
+
+The baseline is from an instrumented test-bundle run, not a complete
+unmodified full-suite command. It passed all assertions. Re-establish a
+comparable uninstrumented baseline before implementing the change.
+Local HTTP listeners are required for integration tests. The first
+measurement attempt could not complete under a sandbox that denied them.
+
+
+---- TICKET ----
+07-verify-document-workflows.md
+# 07: Verify and document faster test workflows
+
+**Blocked by:** 02, 03, 04, 05, 06
+**Touches:** `package.json`, `docs/agents/typescript.md`, `AGENTS.md`,
+contributor documentation, `.scratch/faster-tests/` measurement notes
+**Status:** ready-for-agent
+
+**What to build:** Give contributors documented test workflows and a
+credible comparison of the complete suite before and after the changes.
+
+- [ ] Repeated full-suite measurements on the baseline machine and
+  configuration report wall times, worker count, test and assertion
+  totals, variance, and any resource constraints; report the actual
+  improvement against the 50% target without a timing assertion.
+- [ ] Repeated parallel runs pass without interference, and the complete
+  CI gate passes: lint, typecheck, tests, schema diff, and pack dry run.
+- [ ] Contributor guidance describes full and focused commands, worker
+  control, focused-run guarantees, and timing reproduction.
+- [ ] The comparison records retained integration coverage and any
+  limitations, including macOS and Linux verification actually performed.
+
+
+These are records of earlier runs. The ticket or spec may have changed since then; where they disagree, follow the ticket and spec. Do not repeat an approach these notes say failed unless you can see why it failed.
+
+---- WHAT THE BLOCKING TICKETS DID ----
+## 2026-11-26 10:50 -- faster-tests/02 attempt 1 -- done
+
+Effort: medium. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Attempt notes
+
+The prior three commits already implement all checklist items. The
+focused command tests passed 32/32 on this branch. No new test-first
+cycle was needed because the existing tests and implementation remain
+present; no source changes were made.
+
+Concurrent fixtures verify distinct outputs and mixed exit statuses.
+The existing command tests cover missing input, failed TAP assertions,
+and a crashed child. Cleanup is checked after success, failure and crash.
+
+The earlier merge failures occurred outside this worktree; no merge is
+in progress here. Keep the existing upstream changes when integrating.
+
+Verification: npm run lint and npm run typecheck passed; lint emitted
+the existing deprecated ESLint option warning. npm test passed all
+7,723 assertions (2m 27.7s). The schema diff is clean and no .roast
+directory exists in the checkout. No new commit was needed.
+
+## 2026-11-25 19:40 -- faster-tests/03 attempt 4 -- done
+
+Effort: high. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Attempt notes
+
+- Existing commits implement a runner and focused bundle isolation, but the
+  normal full-suite command still runs the serial bundle. The specified test
+  seams are the full and focused commands.
+
+- Prior commits implement the first three checklist items; verified focused
+  fixture and concurrent-command suites. Connected fixture execution to the
+  actual `test:run` command and checked bundle cleanup on success and failure.
+  Failure fixtures still exercise the same runner directly.
+- Corrected the runner's child-process type error and a pre-existing lint
+  error in the prior bundle change. Updated contributor and agent guidance.
+- The command-level red check exposed recursive serial-suite invocations
+  because the old command ignored fixture arguments; stopped that process tree.
+- Full-suite validation is pending. Documentation updates are scaffolding;
+  test-first would not add value for those edits.
+
+- Final gate: lint and typecheck passed, as did the schema diff and npm
+  pack dry run. One complete `npm test` passed all 7,719 assertions in
+  16 groups, with the default four workers, in 164.03 seconds. The
+  machine was running other workloads, so this is not a controlled
+  timing comparison with the 149.57-second serial baseline. Repeated
+  comparison runs remain for later work; this attempt was instructed to
+  run the full suite only once. No temporary group or focused bundles
+  remained after the run.
+
+## 2026-11-25 19:53 -- faster-tests/04 attempt 4 -- done
+
+Effort: high. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Attempt notes
+
+The prior commits 773da34 and d5eab94 implement the first two items.
+The review test uses the existing agent sleep injection via reviewHooks;
+the HTTP test checks provider-directed delay and cancellation. Focused
+verification is in progress. The ticket already specifies the test seams.
+
+The third item preserves real timers and HTTP; the existing HTTP request
+timeout test covers both. A preservation-only requirement has no honest
+red phase without changing behavior.
+
+Item 1: focused review-anthropic passed (61 assertions). The prior
+commit records the delay and verifies retry, tool execution, capture,
+and usage through real HTTP. No new implementation was necessary.
+
+Item 2: changed the existing cancellation test to start the actual
+abortable timer before aborting, so it exercises cancellation during
+the sleep. Focused agent-http passed (27 assertions). Prior attempt
+recorded a red test before wiring the existing sleep dependency.
+
+Item 3: retained the HTTP timeout test using the real clock and local
+server; it passed in the focused suite. Production retry timing and
+command behavior remain unchanged. No red phase applies to preserving
+existing coverage. Added a reusable review hook cleanup note to AGENTS.md.
+
+Lint and typecheck passed; lint reports an existing deprecated option.
+Full npm test is running as the one permitted final full-suite run.
+
+Blocker: the full npm test did not finish after more than 13 minutes.
+Multiple full suites were running on the machine. A process sample
+showed repeated directory scans; the cause was not established. The
+run was terminated, so the final gate is incomplete. The AGENTS.md
+note remains uncommitted pending a successful final full-suite gate.
+
+## 2026-11-25 20:53 -- faster-tests/05 attempt 1 -- done
+
+Agent exit: 0. Checked items: none.
+
+### Agent notes
+# 05-control-doctor-timeouts — attempt notes
+
+## What was found
+
+The previous attempt (4 commits: f99546e, 601569c, a25e37b + merge) already
+implemented all three checklist items and committed them. The current branch
+HEAD includes these changes.
+
+### Implementation details
+
+`src/cli/doctor.ts` — Added exported `doctorHooks` object with a `timeout(ms)`
+method that returns an `AbortSignal` via `AbortSignal.timeout(ms)`. The hook is
+used in `doctorEndpointCheck` (5000 ms deadline for the models GET) and
+`doctorRoundtripCheck` (35000 ms deadline for inference). Production defaults
+are unchanged.
+
+### Tests added / modified
+
+- `doctor times out a models request and continues`: controls `doctorHooks.timeout`
+  to return a custom abort signal for the first (ms === 5000) call; aborts after
+  the first GET request; asserts the finder endpoint fails with a deadline
+  diagnostic, then that the verifier still runs.
+
+- `doctor preserves probe deadlines for both roles`: records every `timeout(ms)`
+  call; asserts `[5000, 35000, 5000, 35000]` — unchanged production values.
+
+- `doctor cancellation closes the pending models request`: uses an
+  `AbortController` with `CancelledError`; verifies exit code 5, "cancelled"
+  in stderr, no partial doctor results on stdout, connection is closed, and
+  exactly one request was sent (no further probes).
+
+### Checklist status
+
+[x] A controlled timeout produces the expected observable doctor result
+    without waiting for the production timeout.
+
+[x] Cancellation remains distinguishable and produces the expected observable
+    outcome with resources cleaned up.
+
+[x] Production timeout values remain unchanged and representative real-clock
+    integration coverage remains.
+
+### Verification
+
+- Focused doctor tests: 243 passing (npm test -- test/cli/doctor.ts)
+- Full suite: all groups passing, no failures
+- Lint: clean
+- Typecheck: clean
+
+### Notes for next attempt at this ticket
+
+The previous agent's implementation correctly covers all three checklist items.
+No changes needed.
+
+## 2026-11-25 19:55 -- faster-tests/06 attempt 4 -- done
+
+Effort: high. Agent exit: 0. Checked items: none.
+
+### Agent notes
+# Ticket 06 notes
+
+- Prior commit 619e70a removes five git config subprocesses per gate repo.
+- Timing-only measurement does not benefit from a test-first cycle; existing
+  real gate tests exercise the configuration and observable hook behavior.
+- The spec already names the approved seams: real Git and gate subprocesses.
+
+- Repeated full gate focused runs passed 54 assertions each: before
+  50.61/27.70 s, after 21.56/25.74 s, with competing workloads.
+- User and system CPU also fell; wall-time ranges overlap, so the effect
+  cannot be isolated from changing load. Measurement details are recorded
+  in .scratch/faster-tests/gate-fixture-measurement.md.
+
+- All four real gate runs retained scoped-content, fail-open, timeout,
+  and hook behavior coverage; no scenarios were removed.
+
+- Git isolation regression failed first with ambient Git config, then passed
+  after disabling global/system Git config for both init and runner calls.
+- Git tests register temporary directory and spawned-process cleanup with
+  the shared test wrapper, including early failures; no scenarios removed.
+- Two repeated final Git runs passed 22 assertions each. Four gate runs
+  passed 54 assertions each. Checkout has no .roast project state.
+- Final gate: lint and typecheck passed; npm test passed all 7,695
+  assertions in 1117.59 s with several other test workloads active.
+- Schema diff and npm pack --dry-run passed; checkout has no .roast state.
+- Wall time is not comparable to the baseline under this contention.
+
+---- AGENT INSTRUCTIONS ----
+You are an autonomous coding agent. Implement the ticket using /tdd.
+
+Follow these rules:
+- Read the files directly relevant to the ticket before writing code. Also read any AGENTS.md in or above the directories you will touch, plus CONTEXT.md and the relevant docs/adr/ entries if they exist. If they do not exist, proceed silently.
+- Work ONLY on this ticket. Do not fix unrelated problems you notice.
+- Do NOT research external APIs or services via web search. Use the spec and ticket body as your sole reference for API shapes.
+- Dependencies are already installed with `npm ci --prefer-offline --no-audit --no-fund`. Do NOT reinstall them with any other command; to reinstall, run that same command. To add a dependency, use the package manager that command uses, so its lockfile stays in sync.
+- Use /tdd for every checklist item. For each item, write a failing test at the seams named in the spec's Testing Decisions section, then write only enough code to make it pass, then refactor. For a checklist item that is pure scaffolding, config, or docs (where a test adds no value), skip test-first and record that decision in your notes file.
+- While iterating, run only the tests relevant to what you changed. Run `npm test` in full once, as the final gate before your last commit. Do not commit with failing tests. The orchestrator runs the same command after you exit and rejects the ticket if it fails.
+- If the project has a lint script, run it and fix what it reports.
+- INTEGRITY: never delete, skip, weaken, or write tautological tests to force a green result. Only report a checklist item done when its real tests genuinely pass. If an item cannot be completed honestly, leave it unchecked and record what blocked you in your notes file.
+- Do NOT read or modify files outside your current directory (the worktree).
+- Do NOT run git push.
+- Commit after each checklist item, and make sure everything is committed when finished, except your notes file.
+- Keep notes for this attempt in `.redeye/notes.md` (create the directory). Update it after each checklist item and as soon as you hit a blocker, not only at the end. Record what you implemented, files changed, how you read any vague acceptance criteria, what blocked you, and anything the next attempt at this ticket should know. Never commit, git add, or delete this file; the orchestrator collects it.
+- After completing each checklist item in the ticket, print a line: [x] <item text> (matching the checklist text exactly).
+- Before your final commit, record reusable learnings in the nearest AGENTS.md (in or above the directories you modified; prefer that over the repo root). Good additions: module conventions, gotchas, files that must change together, how to test that area, environment requirements. Do NOT add ticket-specific details or temporary debugging notes. Only write when you have knowledge that would help future work in that directory. Reusable patterns go in AGENTS.md; anything specific to this ticket goes in your notes file.
+
+hook: SessionStart
+hook: SessionStart Completed
+codex
+I’ll use the repository’s TDD workflow, inspect the existing timing
+records and test commands, then run the requested verification within the
+ticket’s one-full-suite limit. I’ll record any comparison that cannot be
+established from the available baseline as a limitation.
+exec
+/bin/zsh -lc "pwd && git status --short && rg --files -g 'AGENTS.md' -g 'CONTEXT.md' -g '*faster*' -g '*test*' docs/agents .scratch .agents/skills/tdd .redeye 2>/dev/null" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 245ms:
+/Users/nick/code/roast.faster-tests-07-verify-document-workflows
+.agents/skills/tdd/tests.md
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt4.test.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt4.test.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt4.test.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt4.test.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.test.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt4.test.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.test.log
+.scratch/faster-tests/logs/01-establish-baseline.test.log
+
+exec
+/bin/zsh -lc "cat .agents/skills/tdd/SKILL.md && cat docs/agents/typescript.md && cat package.json && rg --files .scratch/faster-tests docs | sort && rg --files -g 'AGENTS.md' -g 'CONTEXT.md' -g '*CONTRIBUT*' -g 'docs/adr/**'" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 1ms:
+---
+name: tdd
+description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
+---
+
+# Test-Driven Development
+
+TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after.
+
+When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
+
+## What a good test is
+
+Tests verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't. A good test reads like a specification: "user can checkout with valid cart" tells you exactly what capability exists, and it survives refactors because it doesn't care about internal structure.
+
+See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+
+## Seams: where tests go
+
+A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
+
+**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+
+Ask: "What's the public interface, and which seams should we test?"
+
+When the shape of that interface is itself in question (how deep the module is, where the seam belongs, what the interface should expose), call the Skill tool with "codebase-design" for the vocabulary. It is the shared source of the module, interface, depth, seam, adapter, leverage and locality terms, and it is a reference to consult, not a session to run.
+
+## Anti-patterns
+
+- **Implementation-coupled**: mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
+- **Tautological**: the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth: a known-good literal, a worked example, the spec.
+- **Horizontal slicing**: writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead: one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
+
+## Rules of the loop
+
+- **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
+- **One slice at a time.** One seam, one test, one minimal implementation per cycle.
+- **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+# TypeScript
+
+Applies to `src/`, `test/`, and `scripts/`. Notes for one area are in
+that area's file (index in `AGENTS.md`).
+
+## Tooling
+
+- `npm test` builds `dist/cli.js`, then runs the tapzero suite in
+  separate processes. `ROAST_TEST_WORKERS` sets the worker limit; the
+  default is up to four. It does not typecheck. A new test module must
+  be imported from `test/index.ts`. esbuild drops unused imports without
+  resolving them, so only `npm run typecheck` catches a broken import.
+- `npm run test:one -- test/<area>/<file>.ts` bundles one test module
+  to a unique temporary bundle in `test/` and runs it through tap-spec.
+  Focused runs can execute concurrently and remove their bundles on exit.
+  Test modules cannot run directly under Node: their `.js` specifiers only
+  resolve once bundled. It does not typecheck; run `typecheck` too.
+- Lint with `npm run lint`: it preloads `scripts/eslint-ts6.ts`, which
+  gives eslint the TypeScript 6 API because typescript-eslint throws on
+  the TypeScript 7 that `typecheck` uses.
+- Node runs `scripts/` directly (type stripping), so they use only
+  erasable syntax: no enums, namespaces, or parameter properties.
+- `baseOptions` in `scripts/esbuild-options.ts` holds the esbuild
+  options every bundle shares (text loaders for `.tmpl`, `.md`, `.sh`;
+  `mainFields: ['module', 'main']`, which `jsonc-parser`'s UMD build
+  needs); `scripts/bundle.ts` adds the `require` shim banner. A test
+  that bundles code itself uses both.
+- `npm run build` also writes `dist/THIRD_PARTY_LICENSES.txt`
+  (`scripts/licenses.ts`) and fails, naming the package, when a bundled
+  package lacks an allowlisted `license` field or a license file. A new
+  runtime library must pass it; extending `ALLOWED_LICENSES` needs
+  maintainer approval. `@substrate-system/debug` fails it today, so no
+  `src/` module may import it yet. Runtime libraries are
+  `devDependencies` (bundled); `dependencies` stays empty.
+
+## Source conventions
+
+- Keep source ASCII: write `\uXXXX` escapes. Some editing tools decode
+  escapes into literal characters when writing; check with
+  `grep -nP '[^\x00-\x7f]'` after writing a file. eslint `--fix`
+  (quote-props) rewrites a quoted `'\u00e9'` object key into a literal
+  non-ASCII identifier; put such keys in a const and use a computed key.
+- eslint rejects control characters in regex literals
+  (`no-control-regex`) and labeled statements (`no-labels`); scan char
+  codes and use helper functions instead.
+- Startup guards live in `src/startup.ts`, not `src/cli.ts`: importing
+  the entry runs the CLI, so testable helpers sit in other modules.
+- Module-level swappable functions use a mutable hooks object plus a
+  delegating export (`terminalHooks`, `skillHooks.lookPath`), because
+  tests cannot reassign an ESM `let` export. Swap the object's field
+  and restore it in `t.cleanup`.
+- Shared helpers; import these, never re-implement:
+  `src/gocompat/` (`strings.ts`: Go TrimSpace/Ext/`%.2f`/strconv.Quote/
+  byte-order sort and `truncateUtf8`; `duration.ts`: Go durations as
+  bigint nanoseconds; `match.ts`: Go `path.Match`),
+  `src/textsafe/textsafe.ts`, `src/fsutil/atomic.ts`
+  (`writeFileAtomic`, options cover trust, credentials, and gate temp
+  names and error messages), `src/git/git.ts` (the only git runner;
+  pass the CLI context's `env`, it reads `process.env` only when none is
+  given), `src/util/pool.ts` (`mapPool`).
+
+## CLI core (`src/cli/`)
+
+- Commands are `CommandDef`s (`command.ts`) listed in `commands.ts`;
+  `run.ts` builds the yargs tree from that list plus `registerCommand`
+  (tests), and calls the handler only after parsing succeeds.
+- A handler gets a `RunContext` (cwd, env, signal, fetch, one shared
+  `LineReader`) and throws `UsageError` / `ExitSignal` / any error; it
+  never writes the error itself or reads process globals.
+- A group with `subcommands` and no handler prints its help.
+- yargs number parsing is off (`parse-numbers: false`). Declare an
+  integer flag as `type:'string'` and parse decimal digits in the
+  handler, throwing `UsageError` on a bad value (see `parseLimit` in
+  `runs.ts`).
+- Terminal detection and browser opening are swapped through
+  `terminalHooks` (`terminal.ts`).
+- With only the default `$0` command registered, yargs omits the
+  Commands section from root help; it appears once a second command
+  registers.
+
+## Review command (`src/cli/review.ts`)
+
+- End-to-end review tests use `settingsRepo` (`test/helpers/review.ts`):
+  a temp repo with an uncommitted change, a config on a fake `chat`
+  server, keys in env, `review.snapshot: false`, and approval via
+  `roast trust --yes`. It chdirs into the repo.
+- yargs keeps only the last occurrence of an array flag under
+  `duplicate-arguments-array: false`; review slice flags are re-read
+  from `ctx.argv` (`review-flags.ts`). Flags whose "changed" state
+  matters have no yargs default (`undefined` = not given).
+- The structured finder call offers `findings` plus the agent's
+  `__roast_continue`; assert tool presence, not exact lists.
+- Verification (step 17) runs only with `doVerify` and at least one
+  finding. `verify` (`src/verify/verify.ts`) never throws; an abort
+  becomes undecided verdicts, so the run still writes its record and
+  exits 4. Its result types `notes` as `string[]|null` (Go parity), so
+  CLI code after step 17 takes `VerifiedResult`, not `Result`.
+- Verifier CLI tests (`test/cli/review-verify.ts`) put the verifier on
+  its own profile and model and tell its requests apart by the
+  `submit_verdict` tool. The default role key variable
+  (`ROAST_VERIFIER_API_KEY`) backs any profile, so an invalid-key test
+  must delete it from the env.
+- The entry exits within the tick of the first SIGINT, and identical
+  signals sent back to back coalesce, so a second-signal test needs a
+  slow wind-down (a fake `git` that exits slowly on SIGTERM).
+
+## Tests
+
+- Use the `test` wrapper in `test/helpers/test.ts`, which adds Go-style
+  `t.cleanup` (tapzero has no teardown hook). tapzero's `Test` has no
+  `notOk`; write `t.ok(!x, ...)`.
+- CLI tests run in-process with `runRoast` (`test/helpers/run.ts`),
+  which makes a temp repo with an isolated env (`test/helpers/repo.ts`:
+  `tempRepo`, `tempDir`, which also sets `GIT_CEILING_DIRECTORIES`).
+  `test/cli/process.ts` and `test/tooling/bundle.ts` spawn `dist/cli.js`,
+  so they need a fresh `npm run build` (`npm test` does that).
+- Test environments come from `isolatedEnv`, which starts from
+  `cleanEnv(process.env)` (`test/helpers/env.ts`): every `ROAST_*`,
+  `OPENAI_*`, `OPENROUTER_*`, and `ANTHROPIC_*` variable is stripped. A
+  new provider whose key variable has another prefix goes in its
+  `AMBIENT_PREFIXES`. Tests set credentials in `io.env`, never in
+  `process.env`.
+- A review test needs an approved `.roast.jsonc` on the fake server:
+  `settingsRepo` approves, or call `approveProjectConfig`. A test
+  asserting a config error approves a valid config and then edits it,
+  so a trust failure cannot mask the error. A doctor test that probes a
+  custom endpoint approves in its temp repo (`approveDoctorConfig`,
+  `test/cli/doctor.ts`), never in this checkout.
+- Untracked files are part of a review's diff, so a test that checks
+  which file's text reached the fake server keeps decoys out of scope
+  (for example through `.git/info/exclude`).
+- Fakes: `startInferenceServer` (`test/helpers/inference-server.ts`)
+  speaks the three protocols; `providerServer`
+  (`test/helpers/provider-server.ts`) adds key-check and OpenRouter
+  routes. `runRoast({ redirectTo })` uses `redirectingFetch`, so a
+  profile on a built-in endpoint reaches the fake. `requestRecorder` and
+  `reviewMeta` (`test/helpers/review.ts`) read what the fake received
+  and the run's `meta.json`.
+- Swap terminals and the browser with `simulateTerminals` /
+  `captureBrowser` (`test/helpers/terminal.ts`).
+- Tests that spawn processes use `test/helpers/spawn.ts` (`ROOT`,
+  `run`).
+- Git runner tests observe a child by putting a fake `git` shell script
+  first on the injected `PATH` (spawn resolves the command through
+  `env.PATH`); see `test/git/git.ts`.
+- Live tests live under `test/live/` (entry `index.ts`,
+  `npm run test:live`); each passes with a "skipped" note when its
+  `ROAST_LIVE_*` key is unset, so the TAP stream is never empty.
+{
+  "name": "@substrate-system/roast",
+  "version": "0.0.5",
+  "description": "Adversarial review",
+  "license": "(MIT OR Apache-2.0)",
+  "type": "module",
+  "bin": {
+    "roast": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/THIRD_PARTY_LICENSES.txt",
+    "roast.schema.json",
+    "LICENSE.txt",
+    "LICENSE-MIT.txt",
+    "LICENSE-APACHE.txt"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "lint": "node --import ./scripts/eslint-ts6.ts node_modules/eslint/bin/eslint.js src test scripts eslint.config.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "schema": "node scripts/schema.ts",
+    "build": "npm run schema && node scripts/bundle.ts",
+    "build:test": "node scripts/bundle.ts --test",
+    "test": "npm run build && npm run test:run",
+    "test:run": "node scripts/test-groups.ts",
+    "test:tap": "bash -o pipefail -c 'node test/test-bundle.js | tap-spec'",
+    "test:one": "bash -o pipefail -c 'tmp=$(mktemp test/.one-XXXXXX) && mv \"$tmp\" \"$tmp.js\" && trap '\"'\"'rm -f \"$tmp.js\"'\"'\"' EXIT && node scripts/bundle.ts --test-file \"$0\" --outfile \"$tmp.js\" && node \"$tmp.js\" | tap-spec'",
+    "test:live": "node scripts/bundle.ts --live && bash -o pipefail -c 'node test/live-bundle.js | tap-spec'",
+    "toc": "markdown-toc --maxdepth 3 -i README.md",
+    "preversion": "npm run lint",
+    "version": "npm run toc && git add README.md",
+    "postversion": "git push --follow-tags && npm publish",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "yargs": "^18.2.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@substrate-system/debug": "^0.9.64",
+    "@substrate-system/redeye": "^0.1.9",
+    "@substrate-system/tapzero": "^0.10.15",
+    "@types/node": "^22.18.0",
+    "@types/yargs": "^17.0.33",
+    "@typescript/typescript6": "^6.0.2",
+    "ajv": "^8.20.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^10.6.0",
+    "hermes-tiiny-router": "^2.1.3",
+    "jsonc-parser": "^3.3.1",
+    "markdown-toc": "^1.2.0",
+    "newneostandard": "^0.14.1",
+    "tap-spec": "^5.0.0",
+    "tiiny-router-pi": "^0.0.5",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.62.0"
+  },
+  "overrides": {
+    "typescript": "$typescript"
+  },
+  "keywords": [
+    "AI"
+  ],
+  "homepage": "https://github.com/nichoth/roast#readme",
+  "bugs": {
+    "url": "https://github.com/nichoth/roast/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nichoth/roast.git"
+  },
+  "author": "nichoth",
+  "allowScripts": {
+    "esbuild": true
+  }
+}
+.scratch/faster-tests/baseline.md
+.scratch/faster-tests/gate-fixture-measurement.md
+.scratch/faster-tests/issues/01-establish-baseline.md
+.scratch/faster-tests/issues/02-concurrent-focused-runs.md
+.scratch/faster-tests/issues/03-parallel-full-suite.md
+.scratch/faster-tests/issues/04-control-review-retry-delays.md
+.scratch/faster-tests/issues/05-control-doctor-timeouts.md
+.scratch/faster-tests/issues/06-reduce-git-gate-overhead.md
+.scratch/faster-tests/issues/07-verify-document-workflows.md
+.scratch/faster-tests/learnings.md
+.scratch/faster-tests/logs/01-establish-baseline.install.log
+.scratch/faster-tests/logs/01-establish-baseline.log
+.scratch/faster-tests/logs/01-establish-baseline.test.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt2.install.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt2.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt3.install.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt3.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt4.install.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt4.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.attempt4.test.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.install.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.log
+.scratch/faster-tests/logs/02-concurrent-focused-runs.test.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt2.install.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt2.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt3.install.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt3.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt4.install.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt4.log
+.scratch/faster-tests/logs/03-parallel-full-suite.attempt4.test.log
+.scratch/faster-tests/logs/03-parallel-full-suite.install.log
+.scratch/faster-tests/logs/03-parallel-full-suite.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt2.install.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt2.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt3.install.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt3.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt4.install.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt4.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.attempt4.test.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.install.log
+.scratch/faster-tests/logs/04-control-review-retry-delays.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt2.install.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt2.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt3.install.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt3.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt4.install.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt4.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.attempt4.test.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.install.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.log
+.scratch/faster-tests/logs/05-control-doctor-timeouts.test.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt2.install.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt2.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt3.install.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt3.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt4.install.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt4.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.attempt4.test.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.install.log
+.scratch/faster-tests/logs/06-reduce-git-gate-overhead.log
+.scratch/faster-tests/logs/review.install.log
+.scratch/faster-tests/logs/review.log
+.scratch/faster-tests/progress.md
+.scratch/faster-tests/review.md
+.scratch/faster-tests/spec.md
+docs/adr/0001-trusted-project-config.md
+docs/adr/0002-stored-credentials.md
+docs/adr/0003-trust-hash-v2.md
+docs/adr/0004-typescript-rewrite.md
+docs/agents/auth.md
+docs/agents/config.md
+docs/agents/domain.md
+docs/agents/gate.md
+docs/agents/issue-tracker.md
+docs/agents/llm.md
+docs/agents/records.md
+docs/agents/scope-context.md
+docs/agents/skill.md
+docs/agents/triage-labels.md
+docs/agents/trust.md
+docs/agents/typescript.md
+docs/security-model.md
+docs/superpowers/plans/2026-11-14-init-any-model.md
+docs/superpowers/specs/2026-11-14-init-any-model-design.md
+src/runbundle/AGENTS.md
+src/review/AGENTS.md
+src/render/AGENTS.md
+AGENTS.md
+CONTRIBUTING.md
+src/record/AGENTS.md
+CONTEXT.md
+docs/adr/0004-typescript-rewrite.md
+docs/adr/0003-trust-hash-v2.md
+docs/adr/0001-trusted-project-config.md
+docs/adr/0002-stored-credentials.md
+
+exec
+/bin/zsh -lc 'cat .scratch/faster-tests/baseline.md && cat CONTRIBUTING.md && cat CONTEXT.md && cat docs/adr/0004-typescript-rewrite.md && cat scripts/test-groups.ts' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 0ms:
+# Serial full-suite baseline
+
+Measured before changes to test execution or test cases, at commit
+`fa7f82b18e625421e88dc5e3193a2b573f70ac08`. Run the same command on the
+same machine and configuration for the later comparison:
+
+```sh
+/usr/bin/time -p npm test
+```
+
+| Run | Wall time | Result | Assertions |
+| --- | ---: | --- | ---: |
+| 2026-11-25 | 149.57 s | exit 0 | 7,694 passing |
+
+The test reporter showed a duration of 2m 27.9s. It does not print a test
+case total; counting lines formatted as case headings in the captured output
+produced 972, which is an estimate rather than a reporter-provided total.
+Only one run was permitted for this attempt, so this is not yet a repeated
+baseline and provides no measure of variance. Repeat the command before
+changing execution to complete the baseline.
+
+Machine: Apple M1, 8 logical and 8 physical CPUs, 16 GiB memory; macOS
+26.5.1 (25F80), arm64; Node v26.11.1, npm 12.2.3, Git 2.49.0. The
+existing serial command was used with installed dependencies and no worker
+configuration. Other machine load was not controlled.
+
+The run successfully exercised local HTTP listeners. This environment did
+not deny them; a prior sandboxed measurement described in the spec did.
+The earlier 143.6 s figure was an instrumented bundle measurement and is
+not directly comparable to this full-command wall time.
+
+No test cases, test commands, or CI gate configuration were changed to
+collect this measurement.
+# Contributing
+
+Thanks for helping improve Roast. Bug reports and focused pull requests are
+welcome. For large features, new dependencies, inference protocols, or changes
+to artifact formats, open an issue before writing the implementation so the
+contract can be agreed on first.
+
+## Development
+
+Contributors need Node 22.18 or newer and Git, on macOS or Linux.
+The CLI, tests, and build tooling are TypeScript.
+Clone the repository, then:
+
+```sh
+npm install
+npm run lint
+npm run typecheck
+npm test
+```
+
+`npm test` builds `dist/cli.js` (`npm run build`), then runs the non-live test
+suite in isolated Node processes; it does not type-check, so run
+`npm run typecheck` too. Set `ROAST_TEST_WORKERS` to a positive integer
+to limit concurrency (the default is up to four workers).
+`npm run test:one -- test/<area>/<file>.ts` runs one test module with
+a private temporary bundle, so focused runs can execute concurrently.
+To compare timings, run `/usr/bin/time -p npm test` repeatedly on the
+same machine and configuration and record the worker limit and load.
+Scripts under `scripts/` are TypeScript that Node
+runs directly, so they use only erasable syntax (no enums, namespaces, or
+parameter properties).
+
+`npm run build` regenerates `roast.schema.json` from the config schema,
+bundles the CLI into `dist/cli.js`, and writes
+`dist/THIRD_PARTY_LICENSES.txt`. Commit a regenerated schema with the
+change that caused it; CI fails when the committed file differs. After a
+build, `npx roast` in this repository runs `dist/cli.js`, the same way it
+resolves in a user's project. Build before using it: with no build, a
+`roast` elsewhere on your `PATH` can answer instead.
+
+Also run these before opening a pull request:
+
+```sh
+npm pack --dry-run
+shellcheck src/gate/pre-commit.sh
+```
+
+`npm pack --dry-run` lists the files that npm would publish without
+creating or publishing a tarball. Check that the bundle, notices, schema,
+and license files are present.
+
+Tests use local HTTP servers and temporary Git repositories; they must
+not require real model credentials or send repository content to an
+inference provider.
+
+Opt-in live tests in `test/live/` run a minimal two-turn tool loop (one
+exploration call, its result, then the submission on the wrap-up turn)
+against a real endpoint with a small output ceiling. They send a fixed
+probe prompt, never repository content, and skip unless their API key
+variable is set. `npm test` never runs them, and neither does CI:
+
+| Variable | Default |
+| --- | --- |
+| `ROAST_LIVE_ANTHROPIC_API_KEY` | unset (skip) |
+| `ROAST_LIVE_ANTHROPIC_BASE_URL` | `https://api.anthropic.com/v1` |
+| `ROAST_LIVE_ANTHROPIC_MODELS` | `claude-sonnet-5-5` (comma-separated) |
+| `ROAST_LIVE_DEEPSEEK_API_KEY` | unset (skip) |
+| `ROAST_LIVE_DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` |
+| `ROAST_LIVE_DEEPSEEK_MODEL` | `deepseek-v4-pro` |
+| `ROAST_LIVE_DEEPSEEK_PROTOCOL` | `chat` (or `anthropic` with an `/anthropic/v1` base URL) |
+
+```sh
+ROAST_LIVE_ANTHROPIC_API_KEY=... npm run test:live
+```
+
+With a DeepSeek key, a second test makes one structured call with a
+256-token output ceiling, which a thinking model spends on reasoning
+before it calls a tool. It checks that the error names the `length`
+finish and suggests raising `max_output_tokens`, and skips if the model
+answers within the ceiling. Never commit keys or paste them into logs.
+
+CI runs `npm audit --audit-level=high`.
+Roast has no runtime `dependencies`: libraries it runs are
+`devDependencies` bundled into `dist/cli.js`. A new bundled library
+must use a license on the allowlist (see "Third-party notices" below)
+and should be justified in the pull request.
+
+Pull-request CI runs on GitHub-hosted runners with read-only repository
+permissions and no inference or publishing credentials. The `claude-review`
+and `claude-mention` workflows are the exception: they hold an Agent Gateway
+inference credential and can comment on pull requests, but review only
+non-draft PRs from branches in this repository and answer only commenters with
+write access. Keep that boundary: do not run contributor-controlled code in
+`pull_request_target` or a privileged `workflow_run` job. Pin external actions
+to full commit SHAs. Do not bootstrap privileged jobs from pull-request
+artifacts.
+
+Keep changes narrow and include regression tests for behavior changes. Update
+the README whenever a public flag, configuration field, credential variable,
+artifact, data destination, or exit-code behavior changes. Adding, removing,
+or retyping a project config field also means updating `roast.schema.json`.
+
+Pull request titles need a conventional `type:` prefix (such as `feat:`,
+`fix:`, or `docs:`), checked in CI.
+
+## Releases
+
+Roast is published to npm only, from a maintainer's machine; CI never
+publishes. `@substrate-system/roast` is one package holding
+`dist/cli.js`, its third-party notices, the config schema, and Roast's
+license files.
+
+```sh
+npm version <major|minor|patch|x.y.z>
+```
+
+The npm lifecycle does the rest. `preversion` runs `npm run lint`; npm
+writes the version into `package.json`; `version` updates the README
+table of contents and `CHANGELOG.md` (through `auto-changelog`) and
+stages them; npm commits and tags `v<x.y.z>`; `postversion` pushes the
+commit and tag and runs `npm publish`, whose `prepublishOnly` runs
+`npm run build`. If `prepublishOnly` fails
+after the tag was pushed, fix it with a follow-up patch release rather
+than re-tagging.
+
+## Third-party notices
+
+`npm run build` writes `dist/THIRD_PARTY_LICENSES.txt` from the esbuild
+metafile (`scripts/licenses.ts`): one entry per package that has code in
+the bundle, with its declared license and the license files it ships.
+The build fails, naming the package, when a bundled package has no
+`license` field, no license file, or a license outside the allowlist
+`Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `MIT`, `MPL-2.0`,
+`Unlicense`. Extending the allowlist needs maintainer approval. When
+changing dependencies, read the generated notices; automated
+classification is not a substitute for legal review.
+
+Prefer tagged stable dependency releases. Explain any necessary
+development pin or prerelease in its pull request and revisit it when a
+stable release permits.
+
+## Security
+
+Do not report vulnerabilities in a public issue. Follow [SECURITY.md](SECURITY.md)
+instead.
+# Roast
+
+An adversarial, cross-model code reviewer installed as a project dependency
+via npm. One model proposes defects in a Git diff and a second model checks
+surviving candidates when verification runs.
+
+## Language
+
+### Review
+
+**Finder**:
+The role whose model reads the diff and proposes candidate findings.
+_Avoid_: reviewer, author model
+
+**Verifier**:
+The role whose model checks candidate findings against the cited code. It
+can confirm, refute, or report insufficient context for a finding.
+_Avoid_: checker, judge
+
+**Role**:
+One of the two review positions, finder or verifier, each bound to one
+inference profile.
+
+**Inference profile**:
+A named, complete unit of model, endpoint, protocol, output limit and
+credential source.
+_Avoid_: provider, backend
+
+**Run record**:
+The stored evidence of one review, kept inside the project that was reviewed.
+It can contain sensitive reviewed content, prompts, arguments, and provider
+responses; excluding resolved authentication material from dedicated metadata
+does not make the recorded content credential-free.
+_Avoid_: log, history
+
+**Gate**:
+The pre-commit hook that runs a quick review of staged content and fails open.
+_Avoid_: pre-commit check, hook
+
+### Configuration
+
+**Project config**:
+The `.roast.jsonc` file (JSONC) nearest the working directory, searched upward
+no further than the Git toplevel. It is the single home for every non-secret
+setting.
+_Avoid_: repo config, local config, rc file
+
+**Trusted project config**:
+A project config whose security-relevant contents (non-default endpoints,
+credential variable names, prompt-override files) the user has explicitly
+approved for this clone. Roast does not send code or credentials anywhere a
+project config names until it is trusted.
+_Avoid_: allowed config, whitelisted config
+
+**Credential**:
+An API key. Credentials are the only settings that come from outside the
+project config: from environment variables, or from a stored credential. A
+project config may name the variable but never hold the value.
+_Avoid_: secret, token
+
+**Built-in provider**:
+A provider Roast knows by name (OpenAI, Anthropic, OpenRouter): its
+endpoint, the protocols it accepts there, its standard key variable, and
+how to log in.
+A selected profile on a built-in provider's endpoint with an accepted
+protocol and its standard or implicit key variable requires no approval on
+its own; other selected profiles and prompt overrides also matter.
+_Avoid_: default provider, known provider
+
+**Stored credential**:
+A built-in provider's key kept in a credentials file, scoped to the project
+(inside the Git directory) or to the user. It ranks below every environment
+variable and is sent only to that provider's own endpoint (ADR-0002).
+_Avoid_: saved key, cached token
+---
+status: proposed
+---
+
+# Roast is a TypeScript package that talks to providers over raw fetch
+
+Roast was a Go binary shipped through npm as six platform packages and a
+launcher. Every Roast install is already a Node project dependency, so a Go
+toolchain, per-platform builds, and the launcher add release machinery
+without serving users. We rewrite Roast in TypeScript as one pure-JS npm
+package, `2.0.0`, with behavior parity against Go commit `cd08f10` except
+for named changes: no Windows support, no `completion` command, Node
+`>=22.18`, and the trust hash in ADR-0003.
+
+Runtime libraries (`yargs`, `zod`, `jsonc-parser`,
+`@substrate-system/debug`) are bundled into one esbuild ESM file, so
+installing Roast adds no transitive packages to a user's project, the same
+property the Go binary had. Their license texts ship in a generated
+third-party notice.
+
+Inference uses raw `fetch` with one adapter per protocol (`chat`,
+`responses`, `anthropic`) and Roast's own agent loop, not a provider SDK
+or an LLM framework. The Go version used the Fantasy framework but had to
+wrap or override much of it: it captured raw response bytes for run
+records, removed headers the SDKs read from ambient environment variables,
+replaced retry and tool-call-repair behavior, sized requests for the token
+ledger before sending, and reserved a wrap-up turn. Official SDKs would need
+the same overrides on two codebases; owning the wire layer puts all of it in
+one place.
+
+## Considered options
+
+- Keep Go: no rewrite cost, but keeps the multi-package release and a second
+  toolchain for a tool whose users all run Node.
+- Official `openai` and `@anthropic-ai/sdk` SDKs: typed streaming for free,
+  but both read ambient configuration and run their own retries, which Roast
+  must defeat to keep its credential and capture guarantees.
+- Vercel AI SDK: closest to Fantasy, but it hides the request bytes and the
+  retry policy that the ledger and run records depend on.
+// Run the entries in test/index.ts in isolated, bounded child processes.
+import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { readFile, rm } from 'node:fs/promises'
+import { availableParallelism } from 'node:os'
+import { resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { build } from 'esbuild'
+import { ROOT, baseOptions } from './esbuild-options.ts'
+
+const shim = [
+    "import { createRequire as __roastRequire } from 'node:module'",
+    'const require = __roastRequire(import.meta.url)',
+].join('\n')
+
+async function execute (files:string[], number:number):Promise<boolean> {
+    const bundle = resolve(ROOT, 'test', `.group-${randomUUID()}.js`)
+    try {
+        await build({
+            ...baseOptions(),
+            stdin:{
+                contents:files.map(file => `import ${JSON.stringify(file)}`)
+                    .join('\n'),
+                resolveDir:ROOT,
+                loader:'ts',
+            },
+            outfile:bundle,
+            tsconfig:'tsconfig.json',
+            banner:{ js:shim },
+        })
+        const child = spawn(process.execPath, [bundle], {
+            cwd:ROOT, stdio:['ignore', 'pipe', 'pipe'],
+        })
+        const reporter = spawn(process.execPath,
+            [resolve(ROOT, 'node_modules/tap-spec/bin/cmd.js')], {
+                cwd:ROOT, stdio:['pipe', 'pipe', 'pipe'],
+            })
+        let output = ''
+        child.stdout.pipe(reporter.stdin)
+        child.stderr.on('data', chunk => { output += chunk })
+        reporter.stdout.on('data', chunk => { output += chunk })
+        reporter.stderr.on('data', chunk => { output += chunk })
+        const wait = (proc:ChildProcess) => new Promise<boolean>(resolve => {
+            proc.on('error', () => resolve(false))
+            proc.on('close', code => resolve(code === 0))
+        })
+        const results = await Promise.all([wait(child), wait(reporter)])
+        console.log(`\n--- group ${number}: ${files.join(', ')} ---\n${output}`)
+        return results.every(Boolean)
+    } catch (err) {
+        console.error(`group ${number}:`, err)
+        return false
+    } finally {
+        await rm(bundle, { force:true })
+    }
+}
+
+async function main ():Promise<void> {
+    const arg = process.env.ROAST_TEST_WORKERS
+    if (arg !== undefined && (!/^\d+$/.test(arg) || Number(arg) < 1 ||
+        !Number.isSafeInteger(Number(arg)))) {
+        throw new Error('ROAST_TEST_WORKERS must be a positive integer')
+    }
+    const workers = arg ? Number(arg) : Math.min(4, availableParallelism())
+    const args = process.argv.slice(2)
+    let groups:string[][]
+    if (args.length) {
+        groups = args.map(file => [resolve(file)])
+    } else {
+        const index = await readFile(resolve(ROOT, 'test/index.ts'), 'utf8')
+        const imports = [...index.matchAll(/^import '(.+\.js)'$/gm)]
+            .map(match => resolve(ROOT, 'test',
+                match[1].replace(/\.js$/, '.ts')))
+        if (!imports.length) throw new Error('no test imports found')
+        groups = Array.from({ length:Math.min(imports.length, 16) }, () => [])
+        imports.forEach((file, i) => groups[i % groups.length].push(file))
+    }
+    let next = 0
+    let failed = false
+    await Promise.all(Array.from({ length:Math.min(workers, groups.length) },
+        async () => {
+            while (next < groups.length) {
+                const i = next++
+                if (!await execute(groups[i], i + 1)) failed = true
+            }
+        }))
+    if (failed) process.exitCode = 1
+}
+
+try {
+    await main()
+} catch (err) {
+    console.error(err)
+    process.exitCode = 1
+}
+
+codex
+The available baseline has one uninstrumented run, not the repeated
+baseline needed to establish variance. The ticket also limits this
+attempt to one full-suite run, so I can verify one current run and
+document the gap without presenting an unsupported comparison as a
+repeated benchmark.
+exec
+/bin/zsh -lc "mkdir -p .redeye && printf '%s\\n' '# Attempt notes' '' 'The ticket limits this attempt to one full npm test run. The recorded' 'baseline has only one run, so repeated comparable measurements and' 'variance cannot be established in this attempt. Prior parallel runs' 'were under uncontrolled competing workloads. No test is useful for' 'this measurement and documentation work; test-first is skipped.' > .redeye/notes.md
+uname -a
+node --version
+npm --version
+git status --short
+git check-ignore .scratch/faster-tests/baseline.md .redeye/notes.md" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 310ms:
+Darwin olive.local 25.5.0 Darwin Kernel Version 25.5.0: Mon Apr 27 20:38:00 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T8103 arm64
+v26.11.1
+12.2.3
+.redeye/notes.md
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-07-verify-document-workflows/CONTRIBUTING.md
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 3686bfdd49fd8b7df938c2c7cac4e0112dca9867..5b785078c6c98bcb2e7a7cd3c5e95e9beb555985
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -18,17 +18,26 @@
+ npm test
+ ```
+ 
+-`npm test` builds `dist/cli.js` (`npm run build`), then runs the non-live test
+-suite in isolated Node processes; it does not type-check, so run
++`npm test` builds `dist/cli.js`, then runs the complete non-live suite
++in isolated Node processes. It does not type-check, so run
+ `npm run typecheck` too. Set `ROAST_TEST_WORKERS` to a positive integer
+-to limit concurrency (the default is up to four workers).
+-`npm run test:one -- test/<area>/<file>.ts` runs one test module with
+-a private temporary bundle, so focused runs can execute concurrently.
+-To compare timings, run `/usr/bin/time -p npm test` repeatedly on the
+-same machine and configuration and record the worker limit and load.
+-Scripts under `scripts/` are TypeScript that Node
+-runs directly, so they use only erasable syntax (no enums, namespaces, or
+-parameter properties).
++to limit concurrency; the default is up to four workers. For example,
++`ROAST_TEST_WORKERS=1 npm test` is useful on a constrained machine.
++Results are reported by group, and a failing group fails the command.
++
++Run `npm run test:one -- test/<area>/<file>.ts` for one test module.
++Each invocation uses and cleans up its own temporary bundle, so focused
++runs can execute concurrently and each reports its own failure status.
++It does not build the CLI or type-check; run `npm run build` first if the
++module executes `dist/cli.js`.
++
++To compare full-suite timings, run `/usr/bin/time -p npm test` several
++times before and after a change on the same machine and configuration.
++Record each wall time, worker limit, test and assertion totals, results,
++and competing load. Keep the build in both measurements and report the
++range as well as the comparison; timing is not a test assertion.
++Scripts under `scripts/` are TypeScript that Node runs directly, so they
++use only erasable syntax (no enums, namespaces, or parameter properties).
+ 
+ `npm run build` regenerates `roast.schema.json` from the config schema,
+ bundles the CLI into `dist/cli.js`, and writes
+@@ -42,6 +51,7 @@
+ 
+ ```sh
+ npm pack --dry-run
++git diff --exit-code -- roast.schema.json
+ shellcheck src/gate/pre-commit.sh
+ ```
+ 
+
+exec
+/bin/zsh -lc "printf '%s\\n' '' 'Contributor guidance now covers worker limits, complete and focused' 'commands, isolated bundle cleanup, exit status, and timing reproduction.' 'This documentation-only item does not benefit from a test-first cycle.' >> .redeye/notes.md
+git add CONTRIBUTING.md && git commit -m 'docs: explain test workflows and timing comparisons'" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 102ms:
+[roast--faster-tests-07-verify-document-workflows 79fd66a] docs: explain test workflows and timing comparisons
+ 1 file changed, 20 insertions(+), 10 deletions(-)
+
+codex
+[x] Contributor guidance describes full and focused commands, worker
+control, focused-run guarantees, and timing reproduction.
+
+I’ve documented the commands and measurement method. Next I’m running
+the prescribed CI checks and the single permitted full-suite measurement.
+exec
+/bin/zsh -lc 'npm run lint && npm run typecheck && /usr/bin/time -p npm test > /tmp/roast-ticket07-test.log 2>&1 && git diff --exit-code -- roast.schema.json && npm pack --dry-run > /tmp/roast-ticket07-pack.log 2>&1' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ exited 130 in 4090ms:
+npm notice run @substrate-system/roast@0.0.5 lint
+npm notice run node --import ./scripts/eslint-ts6.ts node_modules/eslint/bin/eslint.js src test scripts eslint.config.js
+[@stylistic/eslint-plugin]: You are using deprecated options("overrides.arrow") in "type-annotation-spacing", please use "arrow-spacing" instead.
+
+exec
+/bin/zsh -lc 'npm run lint && npm run typecheck && /usr/bin/time -p npm test > .redeye/full-test.log 2>&1 && git diff --exit-code -- roast.schema.json && npm pack --dry-run > .redeye/pack.log 2>&1' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+exec
+/bin/zsh -lc "git ls-files .scratch/faster-tests/baseline.md && git status --short && rg -n 'test:one|test:run|group|incomplete' test/tooling" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 15ms:
+.scratch/faster-tests/baseline.md
+test/tooling/test-tap.ts:56:    const dir = await mkdtemp(join(tmpdir(), 'roast-groups-'))
+test/tooling/test-tap.ts:62:        const res = await run('npm', ['run', 'test:run', '--', ...files], {
+test/tooling/test-tap.ts:77:test('parallel runner rejects failed, crashed and incomplete groups',
+test/tooling/test-tap.ts:79:        const dir = await mkdtemp(join(tmpdir(), 'roast-groups-fail-'))
+test/tooling/test-tap.ts:91:                    'scripts/test-groups.ts', file,
+test/tooling/test-tap.ts:95:                    `failure ${i} identifies its group`)
+test/tooling/test-tap.ts:113:        const res = await run('npm', ['run', 'test:run', '--', ...files], {
+test/tooling/test-tap.ts:118:        t.equal(await readFile(marker, 'utf8'), '01', 'groups run in order')
+test/tooling/test-tap.ts:125:    const dir = await mkdtemp(join(tmpdir(), 'roast-group-cleanup-'))
+test/tooling/test-tap.ts:133:                'run', 'test:run', '--', file,
+test/tooling/test-one.ts:8:// Runs the real `test:one` script from package.json at the repository
+test/tooling/test-one.ts:9:// root, the way `npm run test:one -- <file>` does: npm appends the
+test/tooling/test-one.ts:14:    const script:string = pkg.scripts['test:one']
+test/tooling/test-one.ts:24:// through `test:one`.
+test/tooling/test-one.ts:53:test('test:one exits 0 when the test module passes', async t => {
+test/tooling/test-one.ts:58:test('test:one exits non-zero when the test module fails', async t => {
+test/tooling/test-one.ts:63:test('test:one exits non-zero without a test file', async t => {
+test/tooling/test-one.ts:68:test('test:one exits non-zero for a missing test file', async t => {
+test/tooling/test-one.ts:73:test('test:one exits non-zero for a failed assertion', async t => {
+test/tooling/test-one.ts:80:test('test:one exits non-zero for a crashed process', async t => {
+
+exec
+/bin/zsh -lc 'tail -n 8 .redeye/full-test.log' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 0ms:
+
+
+  total:     466
+  passing:   466
+  duration:  11.4s
+
+
+
+
+codex
+Lint and typecheck have passed; lint emitted the existing deprecated
+ESLint option warning. The full suite is running with the default worker
+limit, and its results will determine whether the remaining CI checks
+run.
+exec
+/bin/zsh -lc 'tail -n 8 .redeye/full-test.log' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 0ms:
+
+
+  total:     844
+  passing:   844
+  duration:  26.9s
+
+
+
+
+exec
+/bin/zsh -lc 'tail -n 8 .redeye/full-test.log' in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 0ms:
+  passing:   475
+  duration:  19.1s
+
+
+
+real 66.56
+user 80.10
+sys 70.75
+
+ succeeded in 75379ms:
+npm notice run @substrate-system/roast@0.0.5 lint
+npm notice run node --import ./scripts/eslint-ts6.ts node_modules/eslint/bin/eslint.js src test scripts eslint.config.js
+[@stylistic/eslint-plugin]: You are using deprecated options("overrides.arrow") in "type-annotation-spacing", please use "arrow-spacing" instead.
+npm notice run @substrate-system/roast@0.0.5 typecheck
+npm notice run tsc -p tsconfig.json
+
+exec
+/bin/zsh -lc "python3 -c \"import re,pathlib; s=pathlib.Path('.redeye/full-test.log').read_text(); print('groups',len(re.findall(r'"'^--- group '"',s,re.M))); print('assertions',sum(map(int,re.findall(r'"'^  passing:'"\\\\s+(\\\\d+)',s,re.M)))); print('case headings',len(re.findall(r'"'^  [''^ ].*$'"',s,re.M))); print('failures',re.findall(r'"'^  failing:'"\\\\s+.*"'$'"',s,re.M))\"
+git status --short
+ls -a | rg '"'^'"\\.roast"'$'"' || true
+rg '"'^--- group |''^  (total|passing|duration):|''^real '"' .redeye/full-test.log" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 178ms:
+groups 16
+assertions 7760
+case headings 1034
+failures []
+--- group 3: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/bundle.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/glob.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/run.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/capture.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/schema.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/schema.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-list-files.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/starter.ts ---
+  total:     438
+  passing:   438
+  duration:  8.6s
+--- group 4: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/run-import.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/patch.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/process.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/client.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/provider.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/gate-settings.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-grep.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/init.ts ---
+  total:     466
+  passing:   466
+  duration:  11.4s
+--- group 1: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/buildinfo.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/snapshot/snapshot.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/terminal.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/anthropic.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/find.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/login.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-glob.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/render/write.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-survey.ts ---
+  total:     518
+  passing:   518
+  duration:  16.9s
+--- group 5: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/assets.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/build.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/log.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/ledger.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/family.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/gate.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-hardening.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/record/index.ts ---
+  total:     536
+  passing:   536
+  duration:  12.6s
+--- group 2: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/startup.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/snapshot/restore.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/env.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/anthropic-client.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/load.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/logout.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-read-file.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/render/exit.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-verify.ts ---
+  total:     646
+  passing:   646
+  duration:  23.2s
+--- group 8: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/licenses.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/fit.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/skill.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/agent-dispatch.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/flip.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gate/bootstrap.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/validate.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-responses.ts ---
+  total:     278
+  passing:   278
+  duration:  5.7s
+--- group 7: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/test-one.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/renames.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/skill/skill.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/agent-deadline.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/override.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gate/decision.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/types.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review.ts ---
+  total:     297
+  passing:   297
+  duration:  10.6s
+--- group 11: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gocompat/duration.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/hardening.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/errors.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/normalize.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/classify.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/ignore.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/find.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-config.ts ---
+  total:     413
+  passing:   413
+  duration:  6s
+--- group 6: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/test-tap.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/names.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/skill/assets.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/agent-finalization.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/role.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/gate-offer.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/doctor.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/runbundle/index.ts ---
+  total:     844
+  passing:   844
+  duration:  26.9s
+--- group 10: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gocompat/strings.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/huge.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/json.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/paths.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/canonical.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gate/shared.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/schema.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-flags.ts ---
+  total:     341
+  passing:   341
+  duration:  18.3s
+--- group 12: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gocompat/match.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/linguist.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/usage.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/grounding.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/prompts/system.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/runs.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/find-http.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-trust.ts ---
+  total:     1157
+  passing:   1157
+  duration:  14s
+--- group 9: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/textsafe/textsafe.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/staged.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/sse.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/agent-http.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/trust.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/gate/exec.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/review/fingerprint.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-anthropic.ts ---
+  total:     263
+  passing:   263
+  duration:  28.4s
+--- group 16: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/snapshot/denylist.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/errors.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/responses-http.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/bounds.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/stored-keys.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-offset-limit.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/render/markdown.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-units.ts ---
+  total:     322
+  passing:   322
+  duration:  5s
+--- group 13: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/fsutil/atomic.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/abort.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/chat-encode.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/snippet.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/prompts/render.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/runs-snapshot.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/verify/verify.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-records.ts ---
+  total:     372
+  passing:   372
+  duration:  20.3s
+--- group 15: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/util/pool.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/survey.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/responses.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/hardening.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/credentials/credentials.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/require-trust.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/render/json.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-errors.ts ---
+  total:     394
+  passing:   394
+  duration:  12.2s
+--- group 14: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/git/git.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/bytes.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/chat-decode.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tree.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/trust/trust.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/trust.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/openrouter-login.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/review-snapshot.ts ---
+  total:     475
+  passing:   475
+  duration:  19.1s
+real 66.56
+
+codex
+The full CI gate passed. The single current run took 66.56 seconds and
+reported 7,760 passing assertions across 16 groups; that is 55.5% below
+the recorded 149.57-second baseline, but the two single measurements
+cannot establish variance or a reliable repeated comparison.
+exec
+/bin/zsh -lc "head -n 55 .redeye/full-test.log
+rg -n 'test\\(' test/gate/exec.ts test/cli/gate.ts test/llm/agent-http.ts test/cli/doctor.ts | head -n 22" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 581ms:
+npm notice run @substrate-system/roast@0.0.5 test
+npm notice run npm run build && npm run test:run
+npm notice run @substrate-system/roast@0.0.5 build
+npm notice run npm run schema && node scripts/bundle.ts
+npm notice run @substrate-system/roast@0.0.5 schema
+npm notice run node scripts/schema.ts
+roast.schema.json is up to date
+npm notice run @substrate-system/roast@0.0.5 test:run
+npm notice run node scripts/test-groups.ts
+
+--- group 3: /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/bundle.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/scope/glob.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/cli/run.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/llm/capture.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/schema.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/tooling/schema.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/context/tools-list-files.ts, /Users/nick/code/roast.faster-tests-07-verify-document-workflows/test/config/starter.ts ---
+
+  --version prints the package.json version
+
+    ✔ -version exits 0
+    ✔ -version output contains the package version
+    ✔ v exits 0
+    ✔ v output contains the package version
+
+  --help output does not depend on the locale
+
+    ✔ help exits 0 under a German locale
+    ✔ help exits 0 under the C locale
+    ✔ help is printed to stdout
+    ✔ help output is identical
+
+  dist/cli.js has a shebang and the owner execute bit
+
+    ✔ the first line is the node shebang
+    ✔ the owner can execute it
+
+  the entry exits 2 on a Node version below 22.18
+
+    ✔ exits 2
+    ✔ stderr names the floor
+    ✔ the CLI body never ran
+
+  the bundle reads a commented config for gate settings
+
+    ✔ exits 0 
+    ✔ the configured timeout
+    ✔ the configured severity
+
+  globMatch cases from spec 2.14
+
+    ✔ globMatch("vendor/foo/bar.go", "vendor/**")
+    ✔ globMatch("node_modules/dep.js", "node_modules/**")
+    ✔ globMatch("a/node_modules/dep.js", "**/node_modules/**")
+    ✔ globMatch("node_modules/dep.js", "**/node_modules/**")
+    ✔ globMatch("foo.lock", "*.lock")
+    ✔ globMatch("go.sum", "go.sum")
+    ✔ globMatch("foo.pb.go", "*.pb.go")
+    ✔ globMatch("keep.go", "*.pb.go")
+    ✔ globMatch("keep.go", "vendor/**")
+    ✔ globMatch("a/b/c.min.js", "*.min.js")
+test/gate/exec.ts:25:test('the gate reviews only the path-scoped commit content', async t => {
+test/gate/exec.ts:40:test('findings block the commit and reach the user', async t => {
+test/gate/exec.ts:55:test('ROAST_SKIP bypasses the gate entirely', async t => {
+test/gate/exec.ts:64:test('operational failures allow the commit', async t => {
+test/gate/exec.ts:90:test('a missing project roast allows the commit', async t => {
+test/gate/exec.ts:106:test('failing gate settings allow the commit without a review',
+test/gate/exec.ts:122:test('severity comes from gate settings, not the environment',
+test/gate/exec.ts:138:    test('a review past the timeout allows the commit', async t => {
+test/gate/exec.ts:153:    test('the timeout comes from gate settings, not the environment',
+test/gate/exec.ts:169:test('the appended block runs alongside a foreign hook', async t => {
+test/gate/exec.ts:189:test('the block runs in a foreign hook that exits early', async t => {
+test/gate/exec.ts:199:test('a non-executable hook does not run', async t => {
+test/cli/gate.ts:32:test('gate enable installs an executable hook and records consent',
+test/cli/gate.ts:42:test('gate enable without a toplevel config is a usage error', async t => {
+test/cli/gate.ts:55:test('gate enable refreshes a stale own hook and a lost execute bit',
+test/cli/gate.ts:70:test('gate enable appends to a foreign shell hook with a sidecar',
+test/cli/gate.ts:94:test('appending preserves the foreign hook mode', async t => {
+test/cli/gate.ts:105:test('a one-line hook without a newline gets one before the block',
+test/cli/gate.ts:118:test('non-shell and symlinked hooks are left untouched', async t => {
+test/cli/gate.ts:142:test('gate disable removes only what Roast wrote', async t => {
+test/cli/gate.ts:172:test('ownership is anchored', async t => {
+test/cli/gate.ts:190:test('a foreign file at the sidecar path is never clobbered', async t => {
+
+apply patch
+patch: completed
+/Users/nick/code/roast.faster-tests-07-verify-document-workflows/.scratch/faster-tests/verification.md
+diff --git a/.scratch/faster-tests/verification.md b/.scratch/faster-tests/verification.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..0c2bafd6f5f9361b46b747eb27c8cedaddfea78a
+--- /dev/null
++++ b/.scratch/faster-tests/verification.md
+@@ -0,0 +1,25 @@
++# Full-suite verification
++
++On 2026-11-26, `/usr/bin/time -p npm test` passed in 66.56 seconds
++with the default limit of four workers and 16 groups. The reporters
++printed 7,760 passing assertions; counting case headings gives an
++estimated 986 cases. The reporter does not provide a case total.
++The full command includes the build. Node was v26.11.1 and npm 12.2.3
++on the same Apple M1 macOS machine described in `baseline.md`; other
++machine load was not controlled.
++
++The recorded serial baseline was 149.57 seconds, with 7,694 assertions
++and an estimated 972 cases. The single observed comparison is 55.5%
++faster, above the 50% target, but the suites differ and neither side
++has repeated comparable measurements. No variance or robust speedup can
++be inferred. Earlier parallel results in the ticket logs had competing
++workloads and are not controlled repetitions. This attempt was limited
++to one full-suite run, so further runs are needed for the comparison
++and to detect intermittent interference.
++
++Lint, typecheck, the full test command, schema diff, and pack dry run
++passed on macOS. Lint emitted an existing deprecated-option warning.
++Linux was not verified in this attempt. Local HTTP listeners worked.
++The suite retained real Git repositories, gate subprocesses, scoped
++content and fail-open checks, HTTP, real timers, and signal tests;
++live provider tests remain opt-in. No coverage was removed here.
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 3686bfdd49fd8b7df938c2c7cac4e0112dca9867..5b785078c6c98bcb2e7a7cd3c5e95e9beb555985
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -18,17 +18,26 @@
+ npm test
+ ```
+ 
+-`npm test` builds `dist/cli.js` (`npm run build`), then runs the non-live test
+-suite in isolated Node processes; it does not type-check, so run
++`npm test` builds `dist/cli.js`, then runs the complete non-live suite
++in isolated Node processes. It does not type-check, so run
+ `npm run typecheck` too. Set `ROAST_TEST_WORKERS` to a positive integer
+-to limit concurrency (the default is up to four workers).
+-`npm run test:one -- test/<area>/<file>.ts` runs one test module with
+-a private temporary bundle, so focused runs can execute concurrently.
+-To compare timings, run `/usr/bin/time -p npm test` repeatedly on the
+-same machine and configuration and record the worker limit and load.
+-Scripts under `scripts/` are TypeScript that Node
+-runs directly, so they use only erasable syntax (no enums, namespaces, or
+-parameter properties).
++to limit concurrency; the default is up to four workers. For example,
++`ROAST_TEST_WORKERS=1 npm test` is useful on a constrained machine.
++Results are reported by group, and a failing group fails the command.
++
++Run `npm run test:one -- test/<area>/<file>.ts` for one test module.
++Each invocation uses and cleans up its own temporary bundle, so focused
++runs can execute concurrently and each reports its own failure status.
++It does not build the CLI or type-check; run `npm run build` first if the
++module executes `dist/cli.js`.
++
++To compare full-suite timings, run `/usr/bin/time -p npm test` several
++times before and after a change on the same machine and configuration.
++Record each wall time, worker limit, test and assertion totals, results,
++and competing load. Keep the build in both measurements and report the
++range as well as the comparison; timing is not a test assertion.
++Scripts under `scripts/` are TypeScript that Node runs directly, so they
++use only erasable syntax (no enums, namespaces, or parameter properties).
+ 
+ `npm run build` regenerates `roast.schema.json` from the config schema,
+ bundles the CLI into `dist/cli.js`, and writes
+@@ -42,6 +51,7 @@
+ 
+ ```sh
+ npm pack --dry-run
++git diff --exit-code -- roast.schema.json
+ shellcheck src/gate/pre-commit.sh
+ ```
+ 
+
+exec
+/bin/zsh -lc "printf '%s\\n' '' 'The final CI gate passed: lint (existing deprecation warning),' 'typecheck, one npm test, schema diff, and npm pack --dry-run.' 'The full run took 66.56 s with four workers, 16 groups, 7,760' 'assertions and an estimated 986 cases. Baseline 149.57 s gives a' 'single-run 55.5%% reduction, not a repeated controlled result.' 'No Linux verification or repeated parallel runs were performed.' 'Recorded coverage and limitations in verification.md. This is a' 'measurement-only item, so test-first adds no value.' >> .redeye/notes.md
+git add .scratch/faster-tests/verification.md && git commit -m 'docs: record test suite verification and limits'" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 234ms:
+[roast--faster-tests-07-verify-document-workflows e6fd2da] docs: record test suite verification and limits
+ 1 file changed, 25 insertions(+)
+ create mode 100644 .scratch/faster-tests/verification.md
+
+codex
+[x] The comparison records retained integration coverage and any
+limitations, including macOS and Linux verification actually performed.
+
+The remaining measurement and repeat-run items cannot be checked off
+honestly: the baseline was measured once, and this attempt permits only
+one full-suite run. The record identifies both limitations.
+exec
+/bin/zsh -lc "python3 -c \"from pathlib import Path; p=Path('.redeye/notes.md'); p.write_text(p.read_text().replace('55.5%%', '55.5%'))\"
+git status --short
+find test -maxdepth 1 \\( -name '.group-*.js' -o -name '.one-*.js' \\) -print" in /Users/nick/code/roast.faster-tests-07-verify-document-workflows
+ succeeded in 45ms:
+codex
+Documented the test workflows in [CONTRIBUTING.md](/Users/nick/code/roast.faster-tests-07-verify-document-workflows/CONTRIBUTING.md) and recorded the measurement and coverage limits in [verification.md](/Users/nick/code/roast.faster-tests-07-verify-document-workflows/.scratch/faster-tests/verification.md).
+
+The complete CI gate passed on macOS: lint, typecheck, tests, schema diff, and pack dry run. The test run passed 7,760 assertions across 16 groups in **66.56 seconds** with four workers. Lint emitted an existing deprecated-option warning.
+
+That run was 55.5% faster than the recorded 149.57-second baseline, but each measurement was taken only once and the suites differed. The requested repeated comparison and interference check remain incomplete: the baseline has no repeated measurements, and this attempt was limited to one full-suite run. Linux was not verified in this attempt.
+tokens used
+41,352
+Documented the test workflows in [CONTRIBUTING.md](/Users/nick/code/roast.faster-tests-07-verify-document-workflows/CONTRIBUTING.md) and recorded the measurement and coverage limits in [verification.md](/Users/nick/code/roast.faster-tests-07-verify-document-workflows/.scratch/faster-tests/verification.md).
+
+The complete CI gate passed on macOS: lint, typecheck, tests, schema diff, and pack dry run. The test run passed 7,760 assertions across 16 groups in **66.56 seconds** with four workers. Lint emitted an existing deprecated-option warning.
+
+That run was 55.5% faster than the recorded 149.57-second baseline, but each measurement was taken only once and the suites differed. The requested repeated comparison and interference check remain incomplete: the baseline has no repeated measurements, and this attempt was limited to one full-suite run. Linux was not verified in this attempt.

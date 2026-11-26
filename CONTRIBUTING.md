@@ -18,12 +18,26 @@ npm run typecheck
 npm test
 ```
 
-`npm test` builds `dist/cli.js` (`npm run build`), then bundles the test
-suite and runs it in Node; it does not type-check, so run
-`npm run typecheck` too. `npm run test:one -- test/<area>/<file>.ts`
-runs one test module. Scripts under `scripts/` are TypeScript that Node
-runs directly, so they use only erasable syntax (no enums, namespaces, or
-parameter properties).
+`npm test` builds `dist/cli.js`, then runs the complete non-live suite
+in isolated Node processes. It does not type-check, so run
+`npm run typecheck` too. Set `ROAST_TEST_WORKERS` to a positive integer
+to limit concurrency; the default is up to four workers. For example,
+`ROAST_TEST_WORKERS=1 npm test` is useful on a constrained machine.
+Results are reported by group, and a failing group fails the command.
+
+Run `npm run test:one -- test/<area>/<file>.ts` for one test module.
+Each invocation uses and cleans up its own temporary bundle, so focused
+runs can execute concurrently and each reports its own failure status.
+It does not build the CLI or type-check; run `npm run build` first if the
+module executes `dist/cli.js`.
+
+To compare full-suite timings, run `/usr/bin/time -p npm test` several
+times before and after a change on the same machine and configuration.
+Record each wall time, worker limit, test and assertion totals, results,
+and competing load. Keep the build in both measurements and report the
+range as well as the comparison; timing is not a test assertion.
+Scripts under `scripts/` are TypeScript that Node runs directly, so they
+use only erasable syntax (no enums, namespaces, or parameter properties).
 
 `npm run build` regenerates `roast.schema.json` from the config schema,
 bundles the CLI into `dist/cli.js`, and writes
@@ -37,6 +51,7 @@ Also run these before opening a pull request:
 
 ```sh
 npm pack --dry-run
+git diff --exit-code -- roast.schema.json
 shellcheck src/gate/pre-commit.sh
 ```
 

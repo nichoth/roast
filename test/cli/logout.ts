@@ -20,7 +20,7 @@ test('logout removes only the named project key from role resolution',
         const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
         await saveCredential(file, 'anthropic', 'sk-anthropic', new Date())
         await saveCredential(file, 'openai', 'sk-openai', new Date())
-        fs.writeFileSync(path.join(repo.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
             version:1,
             inference_profiles:{
                 a:{ protocol:'anthropic', model:'claude-x' },

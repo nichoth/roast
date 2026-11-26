@@ -70,7 +70,7 @@ test('diff_pair follows the scope', async t => {
     await snapshotsOn(r)
     const first = rev(r, 'HEAD')
     fs.writeFileSync(path.join(r.dir, 'other.go'), 'package main\n')
-    gitIn(r, ['add', 'other.go', '.roast.json'])
+    gitIn(r, ['add', 'other.go', '.roast.jsonc'])
     gitIn(r, ['commit', '-q', '-m', 'second'])
 
     t.equal((await r.roast([...REVIEW, '--uncommitted-only'])).code, 0,

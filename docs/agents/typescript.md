@@ -5,13 +5,15 @@ that area's file (index in `AGENTS.md`).
 
 ## Tooling
 
-- `npm test` builds `dist/cli.js`, then bundles and runs the tapzero
-  suite; it does not typecheck. A new test module must be imported from
-  `test/index.ts`. esbuild drops unused imports without resolving them,
-  so only `npm run typecheck` catches a broken import.
+- `npm test` builds `dist/cli.js`, then runs the tapzero suite in
+  separate processes. `ROAST_TEST_WORKERS` sets the worker limit; the
+  default is up to four. It does not typecheck. A new test module must
+  be imported from `test/index.ts`. esbuild drops unused imports without
+  resolving them, so only `npm run typecheck` catches a broken import.
 - `npm run test:one -- test/<area>/<file>.ts` bundles one test module
-  to `test/one-bundle.js` and runs it through tap-spec. Test modules
-  cannot run directly under Node: their `.js` import specifiers only
+  to a unique temporary bundle in `test/` and runs it through tap-spec.
+  Focused runs can execute concurrently and remove their bundles on exit.
+  Test modules cannot run directly under Node: their `.js` specifiers only
   resolve once bundled. It does not typecheck; run `typecheck` too.
 - Lint with `npm run lint`: it preloads `scripts/eslint-ts6.ts`, which
   gives eslint the TypeScript 6 API because typescript-eslint throws on
@@ -118,7 +120,7 @@ that area's file (index in `AGENTS.md`).
   new provider whose key variable has another prefix goes in its
   `AMBIENT_PREFIXES`. Tests set credentials in `io.env`, never in
   `process.env`.
-- A review test needs an approved `.roast.json` on the fake server:
+- A review test needs an approved `.roast.jsonc` on the fake server:
   `settingsRepo` approves, or call `approveProjectConfig`. A test
   asserting a config error approves a valid config and then edits it,
   so a trust failure cannot mask the error. A doctor test that probes a

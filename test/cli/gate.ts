@@ -43,7 +43,7 @@ test('gate enable without a toplevel config is a usage error', async t => {
     const r = gateRepo(t, false)
     const sub = path.join(r.dir, 'sub')
     fs.mkdirSync(sub)
-    fs.writeFileSync(path.join(sub, '.roast.json'), '{"version": 1}')
+    fs.writeFileSync(path.join(sub, '.roast.jsonc'), '{"version": 1}')
     for (const cwd of [r.dir, sub]) {
         const res = await runRoast(['gate', 'enable'], { cwd, env:r.env })
         t.equal(res.code, 2, 'exits 2')

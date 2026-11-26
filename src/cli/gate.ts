@@ -36,7 +36,7 @@ const settingsCommand:CommandDef = {
     describe:false,
     builder:(y:Argv) => y.option('config', {
         type:'string',
-        describe:'project config file (default: nearest .roast.json)',
+        describe:'project config file (default: nearest .roast.jsonc)',
     }),
     handler:settingsHandler,
 }

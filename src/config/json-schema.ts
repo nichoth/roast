@@ -1,4 +1,4 @@
-// Renders roast.schema.json, the editor schema for .roast.json, from the
+// Renders roast.schema.json, the editor schema for .roast.jsonc, from the
 // zod schema (spec 02, "Schema generation"; spec 15, 2.7).
 import { z } from 'zod'
 import { ConfigSchema } from './schema.js'
@@ -53,7 +53,7 @@ export function projectSchema ():JsonSchema {
     return {
         $schema,
         $id:'https://github.com/nichoth/roast/roast.schema.json',
-        title:'Roast project config (.roast.json)',
+        title:'Roast project config (.roast.jsonc)',
         description:'Every non-secret Roast setting. Credentials come ' +
             'only from environment variables; a profile names its ' +
             'variable with api_key_env.',

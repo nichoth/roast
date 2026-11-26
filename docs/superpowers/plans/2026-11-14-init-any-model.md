@@ -29,7 +29,7 @@ before creating the file and maps that error to a usage error.
 - `init` with no flags writes what it writes today: placeholder models,
   finder on profile `openai`, verifier on profile `anthropic`.
 - No new CLI flags.
-- A model `init` cannot place is a usage error (exit 2) and no `.roast.json`
+- A model `init` cannot place is a usage error (exit 2) and no `.roast.jsonc`
   is written.
 - Tests must not assert on generated comment text (user rule: no brittle
   text tests). Assert through `config.Load` and the config structs.
@@ -142,7 +142,7 @@ Expected: build failure (`Starter` returns one value,
   trust` approval."
 - `UnplaceableModelError.Error()`: say the role's model is not an OpenAI or
   Anthropic model ID that `init` can configure, and that other providers
-  are set up by editing `.roast.json`. Exact wording is the implementer's.
+  are set up by editing `.roast.jsonc`. Exact wording is the implementer's.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -183,7 +183,7 @@ Keep the rest of the test (env keys, `providerServer`,
 `TestInitRejectsAModelItCannotPlace`: in a fresh repo,
 `runRoast(t, "init", "--finder-model", "gemini-2.5-pro")`; assert
 `out.code == ExitUsage`, the error text contains `--finder-model`, and
-`os.Stat` of `.roast.json` returns `fs.ErrNotExist`. Also assert the
+`os.Stat` of `.roast.jsonc` returns `fs.ErrNotExist`. Also assert the
 toplevel `.gitignore` was not created or changed (the starter failing
 should stop `init` before `ensureStateIgnored`).
 
@@ -237,7 +237,7 @@ git commit -m "feat(init): accept any OpenAI or Anthropic model in either role"
 Replace the paragraph that says the starter uses OpenAI for the finder and
 Anthropic for the verifier: `init` picks each role's provider from its model
 ID (OpenAI or Anthropic, on their default endpoints); a model from another
-provider is an error, and those are configured by editing `.roast.json`
+provider is an error, and those are configured by editing `.roast.jsonc`
 (link to [Project config](#project-config)). Keep the sentences about
 placeholders and different model families.
 
@@ -263,7 +263,7 @@ sentence now contradicts the code.
 Build a binary into a scratch directory
 (`go build -o <scratch>/roast ./cmd/roast`), create a scratch Git repo,
 and run `<scratch>/roast init --finder-model claude-opus-5-5
---verifier-model gpt-5-codex` inside it. Confirm `.roast.json` puts the
+--verifier-model gpt-5-codex` inside it. Confirm `.roast.jsonc` puts the
 finder on the `anthropic` profile and the verifier on the `openai` profile.
 Delete the scratch repo and binary.
 

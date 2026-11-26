@@ -240,7 +240,7 @@ export async function runLoginMissing (
         cfg = await loadProjectConfig('', ctx)
     } catch (err) {
         if (err instanceof UsageError && err.message === NO_PROJECT_CONFIG) {
-            throw new UsageError('no project config (.roast.json) found; ' +
+            throw new UsageError('no project config (.roast.jsonc) found; ' +
                 'name a provider (`npx roast login <provider>`, one of ' +
                 `${providerNames()}) or run \`npx roast init\``)
         }

@@ -132,7 +132,7 @@ export const trustCommand:CommandDef = {
     builder:(y:Argv) => y
         .option('config', {
             type:'string',
-            describe:'project config file (default: nearest .roast.json)',
+            describe:'project config file (default: nearest .roast.jsonc)',
         })
         .option('yes', {
             type:'boolean',

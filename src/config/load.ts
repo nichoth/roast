@@ -33,7 +33,7 @@ export {
 
 export type { StoredCredentials }
 
-export const PROJECT_CONFIG_NAME = '.roast.json'
+export const PROJECT_CONFIG_NAME = '.roast.jsonc'
 
 // Every config discovery, parse, and validation failure. The CLI wraps
 // it as a usage error.
@@ -58,7 +58,7 @@ function isNotFound (err:unknown):boolean {
     return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-// The nearest .roast.json at or above `start`, never looking above
+// The nearest .roast.jsonc at or above `start`, never looking above
 // `stop`, or '' when there is none. Directories compare by realpath (on
 // macOS a temp dir is /var/... while git prints /private/var/...), but
 // the returned path is spelled through `start`.

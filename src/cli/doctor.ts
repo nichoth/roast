@@ -37,6 +37,10 @@ export interface DoctorResult {
     detail:string;
 }
 
+export const doctorHooks = {
+    timeout:(ms:number):AbortSignal => AbortSignal.timeout(ms),
+}
+
 function message (err:unknown):string {
     return err instanceof Error ? err.message : String(err)
 }
@@ -127,7 +131,7 @@ export async function doctorEndpointCheck (
         return { ...result, detail:'invalid models endpoint: invalid URL' }
     }
     const signal = AbortSignal.any([
-        ctx.signal, AbortSignal.timeout(5000),
+        ctx.signal, doctorHooks.timeout(5000),
     ])
     try {
         const response = await ctx.fetch(url, {
@@ -177,7 +181,7 @@ export async function doctorRoundtripCheck (
         name:`${name}-roundtrip`, status:'fail', detail:'',
     }
     const signal = AbortSignal.any([
-        ctx.signal, AbortSignal.timeout(35000),
+        ctx.signal, doctorHooks.timeout(35000),
     ])
     try {
         const protocol = resolved.protocol
@@ -465,7 +469,7 @@ export const doctorCommand:CommandDef = {
         .option('config', {
             type:'string',
             default:'',
-            describe:'project config file (default: nearest .roast.json ' +
+            describe:'project config file (default: nearest .roast.jsonc ' +
                 'up to the Git toplevel)',
         })
         .option('json', {

@@ -25,7 +25,7 @@ test('no-argument login deduplicates providers and ignores custom endpoints',
             t.cleanup(() => server.close())
             simulateTerminals(t, true)
             captureBrowser(t)
-            fs.writeFileSync(path.join(repo.dir, '.roast.json'),
+            fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'),
                 JSON.stringify({
                     version:1,
                     inference_profiles:{
@@ -63,7 +63,7 @@ test('no-argument login stops on failure while keeping earlier keys',
         t.cleanup(() => server.close())
         simulateTerminals(t, true)
         const opened = captureBrowser(t)
-        fs.writeFileSync(path.join(repo.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
             version:1,
             inference_profiles:{
                 a:{ protocol:'anthropic', model:'claude-x' },
@@ -104,7 +104,7 @@ test('no-argument login rejects broken stored files before opening browser',
         t.cleanup(() => server.close())
         simulateTerminals(t, true)
         const opened = captureBrowser(t)
-        fs.writeFileSync(path.join(repo.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
             version:1,
             inference_profiles:{ a:{ protocol:'anthropic', model:'claude' } },
             roles:{ finder:{ profile:'a' } },
@@ -171,7 +171,7 @@ test('no-argument login skips every credential source before terminal check',
                         'ROAST_FINDER_API_KEY' : 'PROFILE_KEY'
                 env[variable] = 'existing-key'
             }
-            fs.writeFileSync(path.join(repo.dir, '.roast.json'),
+            fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'),
                 JSON.stringify({
                     version:1,
                     inference_profiles:{
@@ -219,7 +219,7 @@ test('no-argument login reads both providers from one stdin in role order',
         t.cleanup(() => server.close())
         simulateTerminals(t, true)
         const opened = captureBrowser(t)
-        fs.writeFileSync(path.join(repo.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
             version:1,
             inference_profiles:{
                 a:{ protocol:'anthropic', model:'claude-x' },
@@ -572,7 +572,7 @@ test('logging in again replaces the key resolved by project config',
         t.cleanup(() => server.close())
         simulateTerminals(t, true)
         captureBrowser(t)
-        fs.writeFileSync(path.join(repo.dir, '.roast.json'), JSON.stringify({
+        fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
             version:1,
             inference_profiles:{
                 claude:{ protocol:'anthropic', model:'claude-x' },

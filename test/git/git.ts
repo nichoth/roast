@@ -1,4 +1,4 @@
-import { test } from '@substrate-system/tapzero'
+import { test } from '../helpers/test.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -11,7 +11,7 @@ function tempDir (name:string):string {
 
 function tempRepo ():string {
     const dir = tempDir('roast-git-')
-    execFileSync('git', ['init', '-q', dir])
+    execFileSync('git', ['init', '-q', dir], { env:baseEnv() })
     return dir
 }
 
@@ -20,6 +20,8 @@ function baseEnv (extra:Record<string, string> = {}):NodeJS.ProcessEnv {
     return {
         PATH:process.env.PATH ?? '/usr/bin:/bin',
         HOME:process.env.HOME ?? '/',
+        GIT_CONFIG_GLOBAL:'/dev/null',
+        GIT_CONFIG_NOSYSTEM:'1',
         ...extra,
     }
 }
@@ -33,17 +35,35 @@ function alive (pid:number):boolean {
     }
 }
 
+test('git test environment ignores the user Git configuration', async t => {
+    const home = tempDir('roast-git-home-')
+    const savedHome = process.env.HOME
+    fs.writeFileSync(path.join(home, '.gitconfig'),
+        '[roast]\n\tfixture-marker = ambient\n')
+    process.env.HOME = home
+    try {
+        const found = await gitOk(home, ['config', '--get',
+            'roast.fixture-marker'], { env:baseEnv() })
+        t.equal(found, false, 'ambient Git configuration is not read')
+    } finally {
+        if (savedHome === undefined) delete process.env.HOME
+        else process.env.HOME = savedHome
+        fs.rmSync(home, { recursive:true, force:true })
+    }
+})
+
 test('gitRoot from a subdirectory returns the toplevel', async t => {
     const repo = tempRepo()
+    t.cleanup(() => fs.rmSync(repo, { recursive:true, force:true }))
     const sub = path.join(repo, 'a', 'b')
     fs.mkdirSync(sub, { recursive:true })
     const root = await gitRoot(sub, { env:baseEnv() })
     t.equal(fs.realpathSync(root), fs.realpathSync(repo), 'toplevel')
-    fs.rmSync(repo, { recursive:true, force:true })
 })
 
 test('gitRoot outside a repository fails', async t => {
     const dir = tempDir('roast-norepo-')
+    t.cleanup(() => fs.rmSync(dir, { recursive:true, force:true }))
     const env = baseEnv({ GIT_CEILING_DIRECTORIES:path.dirname(dir) })
     let err:unknown
     try {
@@ -54,11 +74,11 @@ test('gitRoot outside a repository fails', async t => {
     t.ok(err instanceof Error, 'rejects')
     t.equal((err as Error)?.message, 'not inside a git repository',
         'not-in-a-repository error')
-    fs.rmSync(dir, { recursive:true, force:true })
 })
 
 test('a failing git call rejects with a GitError', async t => {
     const repo = tempRepo()
+    t.cleanup(() => fs.rmSync(repo, { recursive:true, force:true }))
     let err:unknown
     try {
         await git(repo, ['rev-parse', '--verify', 'no-such-ref'],
@@ -72,31 +92,31 @@ test('a failing git call rejects with a GitError', async t => {
     t.ok(gerr.stderr.length > 0, 'stderr captured')
     t.equal(gerr.message, `exit status 128: ${gerr.stderr.trim()}`,
         'message is exit status and trimmed stderr')
-    fs.rmSync(repo, { recursive:true, force:true })
 })
 
 test('git returns stdout as a Buffer and passes input to stdin', async t => {
     const repo = tempRepo()
+    t.cleanup(() => fs.rmSync(repo, { recursive:true, force:true }))
     const out = await git(repo, ['hash-object', '--stdin'],
         { env:baseEnv(), input:'hello\n' })
     t.ok(Buffer.isBuffer(out), 'Buffer output')
     t.equal(out.toString().trim(),
         'ce013625030ba8dba906f756967f9e9ca394464a', 'blob hash of input')
-    fs.rmSync(repo, { recursive:true, force:true })
 })
 
 test('gitOk resolves false on failure and true on success', async t => {
     const repo = tempRepo()
+    t.cleanup(() => fs.rmSync(repo, { recursive:true, force:true }))
     const env = baseEnv()
     t.equal(await gitOk(repo, ['rev-parse', '--verify', '--quiet',
         'no-such-ref'], { env }), false, 'failing rev-parse --verify')
     t.equal(await gitOk(repo, ['rev-parse', '--git-dir'], { env }), true,
         'succeeding call')
-    fs.rmSync(repo, { recursive:true, force:true })
 })
 
 test('the runner uses the given env and merges extra variables', async t => {
     const repo = tempRepo()
+    t.cleanup(() => fs.rmSync(repo, { recursive:true, force:true }))
     const env = baseEnv({
         GIT_CONFIG_COUNT:'1',
         GIT_CONFIG_KEY_0:'roast.injected',
@@ -131,7 +151,6 @@ test('the runner uses the given env and merges extra variables', async t => {
             else process.env[k] = saved[k]
         }
     }
-    fs.rmSync(repo, { recursive:true, force:true })
 })
 
 // A fake `git` first on the injected PATH records its pid and then blocks.
@@ -161,10 +180,15 @@ for (const ignoreTerm of [false, true]) {
     const what = ignoreTerm ? ' that ignores SIGTERM' : ''
     test(`aborting a git call${what} rejects and kills the child`, async t => {
         const { bin, pidFile } = fakeGit(ignoreTerm)
+        t.cleanup(() => fs.rmSync(bin, { recursive:true, force:true }))
         const ac = new AbortController()
         const reason = new Error('cancelled by test')
         const env = baseEnv({ PATH:`${bin}:${process.env.PATH}` })
         const call = git(bin, ['status'], { env, signal:ac.signal })
+        t.cleanup(async () => {
+            ac.abort()
+            await call.catch(() => {})
+        })
         const pid = Number(await waitFor(pidFile))
         t.ok(alive(pid), 'child is running')
         ac.abort(reason)
@@ -176,7 +200,6 @@ for (const ignoreTerm of [false, true]) {
         }
         t.equal(err, reason, 'rejects with the abort reason')
         t.ok(!alive(pid), 'no child process left')
-        fs.rmSync(bin, { recursive:true, force:true })
     })
 }
 

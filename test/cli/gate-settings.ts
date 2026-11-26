@@ -11,7 +11,7 @@ function repo (t:CleanupTest, config?:string):TempDir {
     const r = tempRepo()
     t.cleanup(r.remove)
     if (config !== undefined) {
-        fs.writeFileSync(path.join(r.dir, '.roast.json'), config)
+        fs.writeFileSync(path.join(r.dir, '.roast.jsonc'), config)
     }
     return r
 }
@@ -81,10 +81,10 @@ test('gate settings without a config is a usage error', async t => {
     // A user-level config must never be read.
     const userDir = path.join(r.env.XDG_CONFIG_HOME, 'roast')
     fs.mkdirSync(userDir, { recursive:true })
-    for (const name of ['config.json', '.roast.json', 'config.jsonc']) {
+    for (const name of ['config.json', '.roast.jsonc', 'config.jsonc']) {
         fs.writeFileSync(path.join(userDir, name), '{"version": 1}')
     }
-    fs.writeFileSync(path.join(r.env.HOME, '.roast.json'), '{"version": 1}')
+    fs.writeFileSync(path.join(r.env.HOME, '.roast.jsonc'), '{"version": 1}')
     const res = await runRoast(['gate', 'settings'],
         { cwd:r.dir, env:r.env })
     t.equal(res.code, 2, 'exits 2')

@@ -414,7 +414,7 @@ export async function writeStarter (
 
 export const initCommand:CommandDef = {
     command:'init',
-    describe:'Write a starter .roast.json in the working directory',
+    describe:'Write a starter .roast.jsonc in the working directory',
     builder:y => y
         .option('finder-model', {
             type:'string',

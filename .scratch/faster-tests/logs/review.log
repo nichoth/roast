@@ -1,0 +1,932 @@
+Reading prompt from stdin...
+OpenAI Codex v0.172.0
+--------
+workdir: /Users/nick/code/roast.review
+model: gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: none
+session id: 01a21943-47dd-79e2-90ae-575d58385532
+--------
+user
+---- SPEC CONTEXT ----
+# Make the test suite substantially faster
+
+**Status:** ready-for-agent
+
+## Problem Statement
+
+Developers wait too long for feedback from the test suite. A measured
+local run took 143.6 seconds for 974 test cases and 7,694 assertions.
+The suite runs cases serially, exercises many real Git repositories and
+subprocesses, and waits for production timeouts and retry backoff. Much
+of that coverage is useful, but elapsed time is not itself evidence of
+correct behavior.
+
+The full suite needs to remain a trustworthy release and CI gate while
+developers get substantially faster feedback. Fast focused checks should
+also remain available during development.
+
+## Solution
+
+Run independent test groups concurrently in isolated processes, and
+replace unnecessary real-time waits with controllable test dependencies.
+Preserve behavioral coverage, including representative real Git, gate,
+HTTP, timeout, cancellation, and subprocess integration tests.
+
+Keep the existing full-suite command and CI gate reliable. Measure the
+result against the current serial baseline on the same machine. Aim for
+at least a 50% reduction in full-suite wall time; report actual results
+and any machine or resource constraints rather than making a fragile
+timing assertion part of the ordinary test suite.
+
+## Implementation Decisions
+
+- Keep the TypeScript package and existing CI gate. The full test command
+  still builds the CLI before tests that execute it, runs the complete
+  non-live suite, and returns a nonzero status on failure.
+- Partition the suite into independent groups that execute in separate
+  Node processes with bounded concurrency. Preserve test discovery and
+  ensure every existing case is included exactly once. A group must not
+  mutate another group's bundle or other shared generated artifacts.
+- Provide readable results for each group, with failures, crashes,
+  incomplete output, and nonzero child exits reliably propagated. Avoid
+  interleaving that makes diagnostics impossible to associate with a
+  group. Preserve the test pipeline's existing failure semantics.
+- Make focused test invocations safe to run concurrently, including
+  independent temporary bundle paths and cleanup. Preserve their existing
+  command-line interface and nonzero failure behavior.
+- Prefer existing dependency injection for sleep and test fakes. Where
+  end-to-end orchestration lacks a suitable seam, add the smallest
+  practical seam at a high boundary. Preserve production retry delays,
+  timeout values, cancellation, and command behavior.
+- Replace avoidable real waits, especially the interrupted inference
+  stream's retry and the doctor timeout, with deterministic control over
+  the relevant delay or signal. Keep representative real-clock tests
+  where they prove integration with actual timers or subprocesses.
+- Investigate the slow gate and Git fixtures with measurements; reduce
+  redundant setup where isolation and behavior allow it. Do not remove a
+  distinct behavioral scenario solely to improve the timing.
+- Keep all tests isolated from user configuration, credentials, and the
+  checkout. Account for process-wide working directories, temporary Git
+  repositories, local HTTP listeners, and cleanup on failure.
+- Use bounded concurrency appropriate to available resources and expose a
+  way to reduce it for constrained or diagnostic environments.
+- Document the commands, worker control, focused-run guarantees, and
+  how to reproduce the timing comparison in contributor documentation.
+
+## Testing Decisions
+
+- A good test verifies observable behavior at the highest practical seam,
+  not private worker scheduling, a specific partition layout, or the
+  implementation of a test double.
+- Exercise the full test command with controlled fixture groups to prove
+  complete execution, isolation, attributable output, and failure
+  propagation for failed assertions, crashes, and incomplete output.
+  Existing test-pipeline command tests provide prior art.
+- Exercise simultaneous focused commands using distinct fixtures, and
+  verify that each reports its own result and exit status. Existing
+  focused-command tests provide prior art.
+- Exercise retry and timeout behavior at existing agent, CLI, and HTTP
+  seams with controlled delays. Verify retry requests, delay decisions,
+  cancellation, and resulting observable outcomes. Existing injected
+  sleep and local inference-server tests provide prior art.
+- Retain representative integration tests using actual Git, gate
+  subprocesses, HTTP, timers, and signals. Preserve assertions about
+  reviewed content, fail-open behavior, and cleanup.
+- Compare repeated full-suite wall times before and after on the same
+  machine and configuration. Report the worker count, test and assertion
+  totals, results, and any variance. Verify the complete CI gate and
+  repeat parallel runs to detect interference; timing is a benchmark,
+  not a hard-coded assertion in the normal test suite.
+
+## Out of Scope
+
+- Changing Roast's production retry, timeout, gate, or review semantics.
+- Deleting meaningful coverage or making live provider tests mandatory.
+- Rewriting the project in another language or replacing the package
+  architecture.
+- Guaranteeing an absolute runtime on every machine or claiming the full
+  integration suite will be instant.
+
+## Further Notes
+
+The baseline is from an instrumented test-bundle run, not a complete
+unmodified full-suite command. It passed all assertions. Re-establish a
+comparable uninstrumented baseline before implementing the change.
+Local HTTP listeners are required for integration tests. The first
+measurement attempt could not complete under a sandbox that denied them.
+
+
+---- REVIEW INSTRUCTIONS ----
+You are reviewing work that autonomous agents merged into this branch, one ticket at a time. Review the combined change as a whole.
+
+The change to review:
+
+    git diff 360c8791c53098a1b8c492a220a896b681be388d..be09a5a5d83ce838816a8226dbbde3aafb8b526d -- . ':(exclude).scratch'
+
+Follow these rules:
+- Read any AGENTS.md in or above the directories the change touches, plus CONTEXT.md and the relevant docs/adr/ entries if they exist. Treat their contracts and the spec above as the standard the code must meet.
+- Look for correctness bugs, missing or weak tests, and code that breaks a documented contract. Ignore style preferences.
+- You may run the tests or the type checker to confirm a suspicion.
+- Do NOT edit, stage, or commit code. Anything you change here is discarded.
+- Do NOT read or modify files outside your current directory (the worktree).
+- Do NOT run git push.
+
+Write your findings to `.redeye/findings.md` (create the directory), most severe first, in exactly this form:
+
+- [ ] <one-line summary of the finding>
+    <file:line, and a concrete input or state that goes wrong>
+
+If you find nothing worth fixing, write the single line: No findings.
+Never git add or commit that file; the orchestrator collects it.
+
+hook: SessionStart
+hook: SessionStart Completed
+codex
+I’ll review the combined diff against the spec and repository contracts,
+then write any actionable findings to `.redeye/findings.md`.
+exec
+/bin/zsh -lc "git diff --stat 360c8791c53098a1b8c492a220a896b681be388d..be09a5a5d83ce838816a8226dbbde3aafb8b526d -- . ':(exclude).scratch'" in /Users/nick/code/roast.review
+ succeeded in 0ms:
+ AGENTS.md                 |  8 +++----
+ CONTRIBUTING.md           | 30 +++++++++++++++++---------
+ docs/agents/typescript.md |  5 +++--
+ test/tooling/test-one.ts  | 55 ++++++++++++++++++++++++++++++++++++++++++++++-
+ 4 files changed, 80 insertions(+), 18 deletions(-)
+
+exec
+/bin/zsh -lc "rg --files -g 'AGENTS.md' -g 'CONTEXT.md' -g 'docs/adr/**' -g 'docs/agents/typescript.md'" in /Users/nick/code/roast.review
+exec
+/bin/zsh -lc 'git status --short && git log -1 --oneline' in /Users/nick/code/roast.review
+exec
+/bin/zsh -lc "git diff 360c8791c53098a1b8c492a220a896b681be388d..be09a5a5d83ce838816a8226dbbde3aafb8b526d -- . ':(exclude).scratch'" in /Users/nick/code/roast.review
+ succeeded in 17ms:
+diff --git a/AGENTS.md b/AGENTS.md
+index 89bb5de..40f6202 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -45,13 +45,11 @@ here. This file holds only what most tasks hit.
+ 
+ ## Traps every task hits
+ 
+-- Focused tests write unique temporary bundles, so independent
+-  `npm run test:one` invocations can run concurrently.
+-- `npm run test:one` writes a shared bundle; run single-file suites
+-  sequentially to avoid executing the wrong suite.
+ - In-process review tests can replace `reviewHooks.sleep` to control
+   agent retry delays; restore it in `t.cleanup` to isolate later tests.
+-
++- Focused test bundles live in `test/` so Node treats them as package
++  ESM and their relative paths match the full test bundle. Each run
++  owns its temporary file and removes it on exit.
+ - `JSON.parse` syntax errors can quote the input. Credential-file parse
+   errors must use value-free messages so diagnostic output cannot expose
+   a stored key.
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 3686bfd..5b78507 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -18,17 +18,26 @@ npm run typecheck
+ npm test
+ ```
+ 
+-`npm test` builds `dist/cli.js` (`npm run build`), then runs the non-live test
+-suite in isolated Node processes; it does not type-check, so run
++`npm test` builds `dist/cli.js`, then runs the complete non-live suite
++in isolated Node processes. It does not type-check, so run
+ `npm run typecheck` too. Set `ROAST_TEST_WORKERS` to a positive integer
+-to limit concurrency (the default is up to four workers).
+-`npm run test:one -- test/<area>/<file>.ts` runs one test module with
+-a private temporary bundle, so focused runs can execute concurrently.
+-To compare timings, run `/usr/bin/time -p npm test` repeatedly on the
+-same machine and configuration and record the worker limit and load.
+-Scripts under `scripts/` are TypeScript that Node
+-runs directly, so they use only erasable syntax (no enums, namespaces, or
+-parameter properties).
++to limit concurrency; the default is up to four workers. For example,
++`ROAST_TEST_WORKERS=1 npm test` is useful on a constrained machine.
++Results are reported by group, and a failing group fails the command.
++
++Run `npm run test:one -- test/<area>/<file>.ts` for one test module.
++Each invocation uses and cleans up its own temporary bundle, so focused
++runs can execute concurrently and each reports its own failure status.
++It does not build the CLI or type-check; run `npm run build` first if the
++module executes `dist/cli.js`.
++
++To compare full-suite timings, run `/usr/bin/time -p npm test` several
++times before and after a change on the same machine and configuration.
++Record each wall time, worker limit, test and assertion totals, results,
++and competing load. Keep the build in both measurements and report the
++range as well as the comparison; timing is not a test assertion.
++Scripts under `scripts/` are TypeScript that Node runs directly, so they
++use only erasable syntax (no enums, namespaces, or parameter properties).
+ 
+ `npm run build` regenerates `roast.schema.json` from the config schema,
+ bundles the CLI into `dist/cli.js`, and writes
+@@ -42,6 +51,7 @@ Also run these before opening a pull request:
+ 
+ ```sh
+ npm pack --dry-run
++git diff --exit-code -- roast.schema.json
+ shellcheck src/gate/pre-commit.sh
+ ```
+ 
+diff --git a/docs/agents/typescript.md b/docs/agents/typescript.md
+index 625359a..2771123 100644
+--- a/docs/agents/typescript.md
++++ b/docs/agents/typescript.md
+@@ -11,8 +11,9 @@ that area's file (index in `AGENTS.md`).
+   be imported from `test/index.ts`. esbuild drops unused imports without
+   resolving them, so only `npm run typecheck` catches a broken import.
+ - `npm run test:one -- test/<area>/<file>.ts` bundles one test module
+-  to a unique temporary bundle and runs it through tap-spec. Test modules
+-  cannot run directly under Node: their `.js` import specifiers only
++  to a unique temporary bundle in `test/` and runs it through tap-spec.
++  Focused runs can execute concurrently and remove their bundles on exit.
++  Test modules cannot run directly under Node: their `.js` specifiers only
+   resolve once bundled. It does not typecheck; run `typecheck` too.
+ - Lint with `npm run lint`: it preloads `scripts/eslint-ts6.ts`, which
+   gives eslint the TypeScript 6 API because typescript-eslint throws on
+diff --git a/test/tooling/test-one.ts b/test/tooling/test-one.ts
+index b9e0f24..db18d38 100644
+--- a/test/tooling/test-one.ts
++++ b/test/tooling/test-one.ts
+@@ -1,3 +1,4 @@
++import { existsSync } from 'node:fs'
+ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+ import { tmpdir } from 'node:os'
+ import { delimiter, join } from 'node:path'
+@@ -34,6 +35,21 @@ async function testOneSource (source:string) {
+ 
+ const PASSING_TAP = "console.log('TAP version 13\\nok 1 - fine\\n1..1')\n"
+ 
++test('simultaneous focused commands keep their own results', async t => {
++    const results = await Promise.all(Array.from({ length:8 }, (_, i) => {
++        const label = `focused-fixture-${i}`
++        const status = i % 2
++        const source = `console.log('TAP version 13\\nok 1 - ${label}` +
++            `\\n1..1')\nprocess.exitCode = ${status}\n`
++        return testOneSource(source)
++    }))
++    for (const [i, res] of results.entries()) {
++        t.equal(res.code, i % 2, `fixture ${i} exit status`)
++        t.ok(res.stdout.includes(`focused-fixture-${i}`),
++            `fixture ${i} reports its own output`)
++    }
++})
++
+ test('test:one exits 0 when the test module passes', async t => {
+     const res = await testOneSource(PASSING_TAP)
+     t.equal(res.code, 0, 'exits 0')
+@@ -49,8 +65,45 @@ test('test:one exits non-zero without a test file', async t => {
+     t.ok(res.code !== 0, 'exits non-zero')
+ })
+ 
++test('test:one exits non-zero for a missing test file', async t => {
++    const res = await testOne(['test/no-such-focused-test.ts'])
++    t.ok(res.code !== 0, 'exits non-zero')
++})
++
++test('test:one exits non-zero for a failed assertion', async t => {
++    const res = await testOneSource(
++        "console.log('TAP version 13\\nnot ok 1 - broken\\n1..1')\n"
++    )
++    t.ok(res.code !== 0, 'exits non-zero')
++})
++
++test('test:one exits non-zero for a crashed process', async t => {
++    const res = await testOneSource("throw new Error('fixture crash')\n")
++    t.ok(res.code !== 0, 'exits non-zero')
++    t.ok(res.stderr.includes('fixture crash'), 'reports the crash')
++})
++
++test('focused bundles are removed after success and failure', async t => {
++    for (const [name, ending, expected] of [
++        ['success', '', 0],
++        ['failure', 'process.exitCode = 1', 1],
++        ['crash', "throw new Error('crash')", 1],
++    ] as const) {
++        const source = "import { fileURLToPath } from 'node:url'\n" +
++            "console.error('bundle-path=' + " +
++            'fileURLToPath(import.meta.url))\n' +
++            PASSING_TAP + ending + '\n'
++        const res = await testOneSource(source)
++        const path = res.stderr.match(/bundle-path=(.+)/)?.[1]
++        t.equal(res.code, expected, `${name} has expected exit status`)
++        t.ok(path, `${name} reports its bundle path`)
++        t.ok(path && !existsSync(path), `${name} removes its bundle`)
++    }
++})
++
+ test('simultaneous focused commands keep their results separate', async t => {
+-    const passing = "console.log('TAP version 13\\nok 1 - distinct-pass\\n1..1')"
++    const passing = "console.log('TAP version 13\\n" +
++        "ok 1 - distinct-pass\\n1..1')"
+     const failing = "console.error('distinct-fail'); " +
+         "console.log('TAP version 13\\nnot ok 1 - broken\\n1..1')"
+     const [good, bad] = await Promise.all([
+
+ succeeded in 49ms:
+src/runbundle/AGENTS.md
+AGENTS.md
+CONTEXT.md
+src/review/AGENTS.md
+src/record/AGENTS.md
+src/render/AGENTS.md
+docs/agents/typescript.md
+docs/adr/0004-typescript-rewrite.md
+docs/adr/0003-trust-hash-v2.md
+docs/adr/0001-trusted-project-config.md
+docs/adr/0002-stored-credentials.md
+
+ succeeded in 51ms:
+be09a5a redeye: update ticket checklists
+
+exec
+/bin/zsh -lc 'cat CONTEXT.md docs/adr/0004-typescript-rewrite.md docs/agents/typescript.md' in /Users/nick/code/roast.review
+exec
+/bin/zsh -lc 'cat test/tooling/test-one.ts' in /Users/nick/code/roast.review
+exec
+/bin/zsh -lc "rg -n 'test:one|ROAST_TEST_WORKERS|test-one' scripts test package.json" in /Users/nick/code/roast.review
+exec
+/bin/zsh -lc 'cat package.json' in /Users/nick/code/roast.review
+ succeeded in 11ms:
+{
+  "name": "@substrate-system/roast",
+  "version": "0.0.5",
+  "description": "Adversarial review",
+  "license": "(MIT OR Apache-2.0)",
+  "type": "module",
+  "bin": {
+    "roast": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/THIRD_PARTY_LICENSES.txt",
+    "roast.schema.json",
+    "LICENSE.txt",
+    "LICENSE-MIT.txt",
+    "LICENSE-APACHE.txt"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "lint": "node --import ./scripts/eslint-ts6.ts node_modules/eslint/bin/eslint.js src test scripts eslint.config.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "schema": "node scripts/schema.ts",
+    "build": "npm run schema && node scripts/bundle.ts",
+    "build:test": "node scripts/bundle.ts --test",
+    "test": "npm run build && npm run test:run",
+    "test:run": "node scripts/test-groups.ts",
+    "test:tap": "bash -o pipefail -c 'node test/test-bundle.js | tap-spec'",
+    "test:one": "bash -o pipefail -c 'tmp=$(mktemp test/.one-XXXXXX) && mv \"$tmp\" \"$tmp.js\" && trap '\"'\"'rm -f \"$tmp.js\"'\"'\"' EXIT && node scripts/bundle.ts --test-file \"$0\" --outfile \"$tmp.js\" && node \"$tmp.js\" | tap-spec'",
+    "test:live": "node scripts/bundle.ts --live && bash -o pipefail -c 'node test/live-bundle.js | tap-spec'",
+    "toc": "markdown-toc --maxdepth 3 -i README.md",
+    "preversion": "npm run lint",
+    "version": "npm run toc && git add README.md",
+    "postversion": "git push --follow-tags && npm publish",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "yargs": "^18.2.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@substrate-system/debug": "^0.9.64",
+    "@substrate-system/redeye": "^0.1.9",
+    "@substrate-system/tapzero": "^0.10.15",
+    "@types/node": "^22.18.0",
+    "@types/yargs": "^17.0.33",
+    "@typescript/typescript6": "^6.0.2",
+    "ajv": "^8.20.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^10.6.0",
+    "hermes-tiiny-router": "^2.1.3",
+    "jsonc-parser": "^3.3.1",
+    "markdown-toc": "^1.2.0",
+    "newneostandard": "^0.14.1",
+    "tap-spec": "^5.0.0",
+    "tiiny-router-pi": "^0.0.5",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.62.0"
+  },
+  "overrides": {
+    "typescript": "$typescript"
+  },
+  "keywords": [
+    "AI"
+  ],
+  "homepage": "https://github.com/nichoth/roast#readme",
+  "bugs": {
+    "url": "https://github.com/nichoth/roast/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nichoth/roast.git"
+  },
+  "author": "nichoth",
+  "allowScripts": {
+    "esbuild": true
+  }
+}
+
+ succeeded in 50ms:
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
+import { test } from '@substrate-system/tapzero'
+import { ROOT, run } from '../helpers/spawn.js'
+
+// Runs the real `test:one` script from package.json at the repository
+// root, the way `npm run test:one -- <file>` does: npm appends the
+// arguments to the script text.
+async function testOne (args:string[]) {
+    const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'),
+        'utf8'))
+    const script:string = pkg.scripts['test:one']
+    const bin = join(ROOT, 'node_modules', '.bin')
+    const quoted = args.map(arg => `'${arg}'`).join(' ')
+    return run('sh', ['-c', `${script} ${quoted}`], {
+        cwd:ROOT,
+        env:{ ...process.env, PATH:bin + delimiter + process.env.PATH },
+    })
+}
+
+// Writes `source` as a test module in a temporary directory and runs it
+// through `test:one`.
+async function testOneSource (source:string) {
+    const dir = await mkdtemp(join(tmpdir(), 'roast-test-one-'))
+    try {
+        const file = join(dir, 'fixture.ts')
+        await writeFile(file, source)
+        return await testOne([file])
+    } finally {
+        await rm(dir, { recursive:true, force:true })
+    }
+}
+
+const PASSING_TAP = "console.log('TAP version 13\\nok 1 - fine\\n1..1')\n"
+
+test('simultaneous focused commands keep their own results', async t => {
+    const results = await Promise.all(Array.from({ length:8 }, (_, i) => {
+        const label = `focused-fixture-${i}`
+        const status = i % 2
+        const source = `console.log('TAP version 13\\nok 1 - ${label}` +
+            `\\n1..1')\nprocess.exitCode = ${status}\n`
+        return testOneSource(source)
+    }))
+    for (const [i, res] of results.entries()) {
+        t.equal(res.code, i % 2, `fixture ${i} exit status`)
+        t.ok(res.stdout.includes(`focused-fixture-${i}`),
+            `fixture ${i} reports its own output`)
+    }
+})
+
+test('test:one exits 0 when the test module passes', async t => {
+    const res = await testOneSource(PASSING_TAP)
+    t.equal(res.code, 0, 'exits 0')
+})
+
+test('test:one exits non-zero when the test module fails', async t => {
+    const res = await testOneSource(PASSING_TAP + 'process.exitCode = 1\n')
+    t.ok(res.code !== 0, 'exits non-zero')
+})
+
+test('test:one exits non-zero without a test file', async t => {
+    const res = await testOne([])
+    t.ok(res.code !== 0, 'exits non-zero')
+})
+
+test('test:one exits non-zero for a missing test file', async t => {
+    const res = await testOne(['test/no-such-focused-test.ts'])
+    t.ok(res.code !== 0, 'exits non-zero')
+})
+
+test('test:one exits non-zero for a failed assertion', async t => {
+    const res = await testOneSource(
+        "console.log('TAP version 13\\nnot ok 1 - broken\\n1..1')\n"
+    )
+    t.ok(res.code !== 0, 'exits non-zero')
+})
+
+test('test:one exits non-zero for a crashed process', async t => {
+    const res = await testOneSource("throw new Error('fixture crash')\n")
+    t.ok(res.code !== 0, 'exits non-zero')
+    t.ok(res.stderr.includes('fixture crash'), 'reports the crash')
+})
+
+test('focused bundles are removed after success and failure', async t => {
+    for (const [name, ending, expected] of [
+        ['success', '', 0],
+        ['failure', 'process.exitCode = 1', 1],
+        ['crash', "throw new Error('crash')", 1],
+    ] as const) {
+        const source = "import { fileURLToPath } from 'node:url'\n" +
+            "console.error('bundle-path=' + " +
+            'fileURLToPath(import.meta.url))\n' +
+            PASSING_TAP + ending + '\n'
+        const res = await testOneSource(source)
+        const path = res.stderr.match(/bundle-path=(.+)/)?.[1]
+        t.equal(res.code, expected, `${name} has expected exit status`)
+        t.ok(path, `${name} reports its bundle path`)
+        t.ok(path && !existsSync(path), `${name} removes its bundle`)
+    }
+})
+
+test('simultaneous focused commands keep their results separate', async t => {
+    const passing = "console.log('TAP version 13\\n" +
+        "ok 1 - distinct-pass\\n1..1')"
+    const failing = "console.error('distinct-fail'); " +
+        "console.log('TAP version 13\\nnot ok 1 - broken\\n1..1')"
+    const [good, bad] = await Promise.all([
+        testOneSource(passing), testOneSource(failing),
+    ])
+    t.equal(good.code, 0, 'passing command succeeds')
+    t.ok(bad.code !== 0, 'failing command fails')
+    t.ok(good.stdout.includes('distinct-pass'), 'passing output is its own')
+    t.ok(bad.stderr.includes('distinct-fail'), 'failing output is its own')
+})
+
+ succeeded in 56ms:
+# Roast
+
+An adversarial, cross-model code reviewer installed as a project dependency
+via npm. One model proposes defects in a Git diff and a second model checks
+surviving candidates when verification runs.
+
+## Language
+
+### Review
+
+**Finder**:
+The role whose model reads the diff and proposes candidate findings.
+_Avoid_: reviewer, author model
+
+**Verifier**:
+The role whose model checks candidate findings against the cited code. It
+can confirm, refute, or report insufficient context for a finding.
+_Avoid_: checker, judge
+
+**Role**:
+One of the two review positions, finder or verifier, each bound to one
+inference profile.
+
+**Inference profile**:
+A named, complete unit of model, endpoint, protocol, output limit and
+credential source.
+_Avoid_: provider, backend
+
+**Run record**:
+The stored evidence of one review, kept inside the project that was reviewed.
+It can contain sensitive reviewed content, prompts, arguments, and provider
+responses; excluding resolved authentication material from dedicated metadata
+does not make the recorded content credential-free.
+_Avoid_: log, history
+
+**Gate**:
+The pre-commit hook that runs a quick review of staged content and fails open.
+_Avoid_: pre-commit check, hook
+
+### Configuration
+
+**Project config**:
+The `.roast.jsonc` file (JSONC) nearest the working directory, searched upward
+no further than the Git toplevel. It is the single home for every non-secret
+setting.
+_Avoid_: repo config, local config, rc file
+
+**Trusted project config**:
+A project config whose security-relevant contents (non-default endpoints,
+credential variable names, prompt-override files) the user has explicitly
+approved for this clone. Roast does not send code or credentials anywhere a
+project config names until it is trusted.
+_Avoid_: allowed config, whitelisted config
+
+**Credential**:
+An API key. Credentials are the only settings that come from outside the
+project config: from environment variables, or from a stored credential. A
+project config may name the variable but never hold the value.
+_Avoid_: secret, token
+
+**Built-in provider**:
+A provider Roast knows by name (OpenAI, Anthropic, OpenRouter): its
+endpoint, the protocols it accepts there, its standard key variable, and
+how to log in.
+A selected profile on a built-in provider's endpoint with an accepted
+protocol and its standard or implicit key variable requires no approval on
+its own; other selected profiles and prompt overrides also matter.
+_Avoid_: default provider, known provider
+
+**Stored credential**:
+A built-in provider's key kept in a credentials file, scoped to the project
+(inside the Git directory) or to the user. It ranks below every environment
+variable and is sent only to that provider's own endpoint (ADR-0002).
+_Avoid_: saved key, cached token
+---
+status: proposed
+---
+
+# Roast is a TypeScript package that talks to providers over raw fetch
+
+Roast was a Go binary shipped through npm as six platform packages and a
+launcher. Every Roast install is already a Node project dependency, so a Go
+toolchain, per-platform builds, and the launcher add release machinery
+without serving users. We rewrite Roast in TypeScript as one pure-JS npm
+package, `2.0.0`, with behavior parity against Go commit `cd08f10` except
+for named changes: no Windows support, no `completion` command, Node
+`>=22.18`, and the trust hash in ADR-0003.
+
+Runtime libraries (`yargs`, `zod`, `jsonc-parser`,
+`@substrate-system/debug`) are bundled into one esbuild ESM file, so
+installing Roast adds no transitive packages to a user's project, the same
+property the Go binary had. Their license texts ship in a generated
+third-party notice.
+
+Inference uses raw `fetch` with one adapter per protocol (`chat`,
+`responses`, `anthropic`) and Roast's own agent loop, not a provider SDK
+or an LLM framework. The Go version used the Fantasy framework but had to
+wrap or override much of it: it captured raw response bytes for run
+records, removed headers the SDKs read from ambient environment variables,
+replaced retry and tool-call-repair behavior, sized requests for the token
+ledger before sending, and reserved a wrap-up turn. Official SDKs would need
+the same overrides on two codebases; owning the wire layer puts all of it in
+one place.
+
+## Considered options
+
+- Keep Go: no rewrite cost, but keeps the multi-package release and a second
+  toolchain for a tool whose users all run Node.
+- Official `openai` and `@anthropic-ai/sdk` SDKs: typed streaming for free,
+  but both read ambient configuration and run their own retries, which Roast
+  must defeat to keep its credential and capture guarantees.
+- Vercel AI SDK: closest to Fantasy, but it hides the request bytes and the
+  retry policy that the ledger and run records depend on.
+# TypeScript
+
+Applies to `src/`, `test/`, and `scripts/`. Notes for one area are in
+that area's file (index in `AGENTS.md`).
+
+## Tooling
+
+- `npm test` builds `dist/cli.js`, then runs the tapzero suite in
+  separate processes. `ROAST_TEST_WORKERS` sets the worker limit; the
+  default is up to four. It does not typecheck. A new test module must
+  be imported from `test/index.ts`. esbuild drops unused imports without
+  resolving them, so only `npm run typecheck` catches a broken import.
+- `npm run test:one -- test/<area>/<file>.ts` bundles one test module
+  to a unique temporary bundle in `test/` and runs it through tap-spec.
+  Focused runs can execute concurrently and remove their bundles on exit.
+  Test modules cannot run directly under Node: their `.js` specifiers only
+  resolve once bundled. It does not typecheck; run `typecheck` too.
+- Lint with `npm run lint`: it preloads `scripts/eslint-ts6.ts`, which
+  gives eslint the TypeScript 6 API because typescript-eslint throws on
+  the TypeScript 7 that `typecheck` uses.
+- Node runs `scripts/` directly (type stripping), so they use only
+  erasable syntax: no enums, namespaces, or parameter properties.
+- `baseOptions` in `scripts/esbuild-options.ts` holds the esbuild
+  options every bundle shares (text loaders for `.tmpl`, `.md`, `.sh`;
+  `mainFields: ['module', 'main']`, which `jsonc-parser`'s UMD build
+  needs); `scripts/bundle.ts` adds the `require` shim banner. A test
+  that bundles code itself uses both.
+- `npm run build` also writes `dist/THIRD_PARTY_LICENSES.txt`
+  (`scripts/licenses.ts`) and fails, naming the package, when a bundled
+  package lacks an allowlisted `license` field or a license file. A new
+  runtime library must pass it; extending `ALLOWED_LICENSES` needs
+  maintainer approval. `@substrate-system/debug` fails it today, so no
+  `src/` module may import it yet. Runtime libraries are
+  `devDependencies` (bundled); `dependencies` stays empty.
+
+## Source conventions
+
+- Keep source ASCII: write `\uXXXX` escapes. Some editing tools decode
+  escapes into literal characters when writing; check with
+  `grep -nP '[^\x00-\x7f]'` after writing a file. eslint `--fix`
+  (quote-props) rewrites a quoted `'\u00e9'` object key into a literal
+  non-ASCII identifier; put such keys in a const and use a computed key.
+- eslint rejects control characters in regex literals
+  (`no-control-regex`) and labeled statements (`no-labels`); scan char
+  codes and use helper functions instead.
+- Startup guards live in `src/startup.ts`, not `src/cli.ts`: importing
+  the entry runs the CLI, so testable helpers sit in other modules.
+- Module-level swappable functions use a mutable hooks object plus a
+  delegating export (`terminalHooks`, `skillHooks.lookPath`), because
+  tests cannot reassign an ESM `let` export. Swap the object's field
+  and restore it in `t.cleanup`.
+- Shared helpers; import these, never re-implement:
+  `src/gocompat/` (`strings.ts`: Go TrimSpace/Ext/`%.2f`/strconv.Quote/
+  byte-order sort and `truncateUtf8`; `duration.ts`: Go durations as
+  bigint nanoseconds; `match.ts`: Go `path.Match`),
+  `src/textsafe/textsafe.ts`, `src/fsutil/atomic.ts`
+  (`writeFileAtomic`, options cover trust, credentials, and gate temp
+  names and error messages), `src/git/git.ts` (the only git runner;
+  pass the CLI context's `env`, it reads `process.env` only when none is
+  given), `src/util/pool.ts` (`mapPool`).
+
+## CLI core (`src/cli/`)
+
+- Commands are `CommandDef`s (`command.ts`) listed in `commands.ts`;
+  `run.ts` builds the yargs tree from that list plus `registerCommand`
+  (tests), and calls the handler only after parsing succeeds.
+- A handler gets a `RunContext` (cwd, env, signal, fetch, one shared
+  `LineReader`) and throws `UsageError` / `ExitSignal` / any error; it
+  never writes the error itself or reads process globals.
+- A group with `subcommands` and no handler prints its help.
+- yargs number parsing is off (`parse-numbers: false`). Declare an
+  integer flag as `type:'string'` and parse decimal digits in the
+  handler, throwing `UsageError` on a bad value (see `parseLimit` in
+  `runs.ts`).
+- Terminal detection and browser opening are swapped through
+  `terminalHooks` (`terminal.ts`).
+- With only the default `$0` command registered, yargs omits the
+  Commands section from root help; it appears once a second command
+  registers.
+
+## Review command (`src/cli/review.ts`)
+
+- End-to-end review tests use `settingsRepo` (`test/helpers/review.ts`):
+  a temp repo with an uncommitted change, a config on a fake `chat`
+  server, keys in env, `review.snapshot: false`, and approval via
+  `roast trust --yes`. It chdirs into the repo.
+- yargs keeps only the last occurrence of an array flag under
+  `duplicate-arguments-array: false`; review slice flags are re-read
+  from `ctx.argv` (`review-flags.ts`). Flags whose "changed" state
+  matters have no yargs default (`undefined` = not given).
+- The structured finder call offers `findings` plus the agent's
+  `__roast_continue`; assert tool presence, not exact lists.
+- Verification (step 17) runs only with `doVerify` and at least one
+  finding. `verify` (`src/verify/verify.ts`) never throws; an abort
+  becomes undecided verdicts, so the run still writes its record and
+  exits 4. Its result types `notes` as `string[]|null` (Go parity), so
+  CLI code after step 17 takes `VerifiedResult`, not `Result`.
+- Verifier CLI tests (`test/cli/review-verify.ts`) put the verifier on
+  its own profile and model and tell its requests apart by the
+  `submit_verdict` tool. The default role key variable
+  (`ROAST_VERIFIER_API_KEY`) backs any profile, so an invalid-key test
+  must delete it from the env.
+- The entry exits within the tick of the first SIGINT, and identical
+  signals sent back to back coalesce, so a second-signal test needs a
+  slow wind-down (a fake `git` that exits slowly on SIGTERM).
+
+## Tests
+
+- Use the `test` wrapper in `test/helpers/test.ts`, which adds Go-style
+  `t.cleanup` (tapzero has no teardown hook). tapzero's `Test` has no
+  `notOk`; write `t.ok(!x, ...)`.
+- CLI tests run in-process with `runRoast` (`test/helpers/run.ts`),
+  which makes a temp repo with an isolated env (`test/helpers/repo.ts`:
+  `tempRepo`, `tempDir`, which also sets `GIT_CEILING_DIRECTORIES`).
+  `test/cli/process.ts` and `test/tooling/bundle.ts` spawn `dist/cli.js`,
+  so they need a fresh `npm run build` (`npm test` does that).
+- Test environments come from `isolatedEnv`, which starts from
+  `cleanEnv(process.env)` (`test/helpers/env.ts`): every `ROAST_*`,
+  `OPENAI_*`, `OPENROUTER_*`, and `ANTHROPIC_*` variable is stripped. A
+  new provider whose key variable has another prefix goes in its
+  `AMBIENT_PREFIXES`. Tests set credentials in `io.env`, never in
+  `process.env`.
+- A review test needs an approved `.roast.jsonc` on the fake server:
+  `settingsRepo` approves, or call `approveProjectConfig`. A test
+  asserting a config error approves a valid config and then edits it,
+  so a trust failure cannot mask the error. A doctor test that probes a
+  custom endpoint approves in its temp repo (`approveDoctorConfig`,
+  `test/cli/doctor.ts`), never in this checkout.
+- Untracked files are part of a review's diff, so a test that checks
+  which file's text reached the fake server keeps decoys out of scope
+  (for example through `.git/info/exclude`).
+- Fakes: `startInferenceServer` (`test/helpers/inference-server.ts`)
+  speaks the three protocols; `providerServer`
+  (`test/helpers/provider-server.ts`) adds key-check and OpenRouter
+  routes. `runRoast({ redirectTo })` uses `redirectingFetch`, so a
+  profile on a built-in endpoint reaches the fake. `requestRecorder` and
+  `reviewMeta` (`test/helpers/review.ts`) read what the fake received
+  and the run's `meta.json`.
+- Swap terminals and the browser with `simulateTerminals` /
+  `captureBrowser` (`test/helpers/terminal.ts`).
+- Tests that spawn processes use `test/helpers/spawn.ts` (`ROOT`,
+  `run`).
+- Git runner tests observe a child by putting a fake `git` shell script
+  first on the injected `PATH` (spawn resolves the command through
+  `env.PATH`); see `test/git/git.ts`.
+- Live tests live under `test/live/` (entry `index.ts`,
+  `npm run test:live`); each passes with a "skipped" note when its
+  `ROAST_LIVE_*` key is unset, so the TAP stream is never empty.
+
+ succeeded in 88ms:
+package.json:37:    "test:one": "bash -o pipefail -c 'tmp=$(mktemp test/.one-XXXXXX) && mv \"$tmp\" \"$tmp.js\" && trap '\"'\"'rm -f \"$tmp.js\"'\"'\"' EXIT && node scripts/bundle.ts --test-file \"$0\" --outfile \"$tmp.js\" && node \"$tmp.js\" | tap-spec'",
+scripts/test-groups.ts:59:    const arg = process.env.ROAST_TEST_WORKERS
+scripts/test-groups.ts:62:        throw new Error('ROAST_TEST_WORKERS must be a positive integer')
+test/index.ts:8:import './tooling/test-one.js'
+test/tooling/test-tap.ts:115:            env:{ ...process.env, ROAST_TEST_WORKERS:'1' },
+test/tooling/test-one.ts:8:// Runs the real `test:one` script from package.json at the repository
+test/tooling/test-one.ts:9:// root, the way `npm run test:one -- <file>` does: npm appends the
+test/tooling/test-one.ts:14:    const script:string = pkg.scripts['test:one']
+test/tooling/test-one.ts:24:// through `test:one`.
+test/tooling/test-one.ts:26:    const dir = await mkdtemp(join(tmpdir(), 'roast-test-one-'))
+test/tooling/test-one.ts:53:test('test:one exits 0 when the test module passes', async t => {
+test/tooling/test-one.ts:58:test('test:one exits non-zero when the test module fails', async t => {
+test/tooling/test-one.ts:63:test('test:one exits non-zero without a test file', async t => {
+test/tooling/test-one.ts:68:test('test:one exits non-zero for a missing test file', async t => {
+test/tooling/test-one.ts:73:test('test:one exits non-zero for a failed assertion', async t => {
+test/tooling/test-one.ts:80:test('test:one exits non-zero for a crashed process', async t => {
+
+exec
+/bin/zsh -lc 'npm run test:one -- test/tooling/test-one.ts' in /Users/nick/code/roast.review
+ succeeded in 2901ms:
+npm notice run @substrate-system/roast@0.0.5 test:one
+npm notice run bash -o pipefail -c 'tmp=$(mktemp test/.one-XXXXXX) && mv "$tmp" "$tmp.js" && trap '"'"'rm -f "$tmp.js"'"'"' EXIT && node scripts/bundle.ts --test-file "$0" --outfile "$tmp.js" && node "$tmp.js" | tap-spec' test/tooling/test-one.ts
+
+  simultaneous focused commands keep their own results
+
+    ✔ fixture 0 exit status
+    ✔ fixture 0 reports its own output
+    ✔ fixture 1 exit status
+    ✔ fixture 1 reports its own output
+    ✔ fixture 2 exit status
+    ✔ fixture 2 reports its own output
+    ✔ fixture 3 exit status
+    ✔ fixture 3 reports its own output
+    ✔ fixture 4 exit status
+    ✔ fixture 4 reports its own output
+    ✔ fixture 5 exit status
+    ✔ fixture 5 reports its own output
+    ✔ fixture 6 exit status
+    ✔ fixture 6 reports its own output
+    ✔ fixture 7 exit status
+    ✔ fixture 7 reports its own output
+
+  test:one exits 0 when the test module passes
+
+    ✔ exits 0
+
+  test:one exits non-zero when the test module fails
+
+    ✔ exits non-zero
+
+  test:one exits non-zero without a test file
+
+    ✔ exits non-zero
+
+  test:one exits non-zero for a missing test file
+
+    ✔ exits non-zero
+
+  test:one exits non-zero for a failed assertion
+
+    ✔ exits non-zero
+
+  test:one exits non-zero for a crashed process
+
+    ✔ exits non-zero
+    ✔ reports the crash
+
+  focused bundles are removed after success and failure
+
+    ✔ success has expected exit status
+    ✔ success reports its bundle path
+    ✔ success removes its bundle
+    ✔ failure has expected exit status
+    ✔ failure reports its bundle path
+    ✔ failure removes its bundle
+    ✔ crash has expected exit status
+    ✔ crash reports its bundle path
+    ✔ crash removes its bundle
+
+  simultaneous focused commands keep their results separate
+
+    ✔ passing command succeeds
+    ✔ failing command fails
+    ✔ passing output is its own
+    ✔ failing output is its own
+
+
+  total:     36
+  passing:   36
+  duration:  2.2s
+
+
+
+exec
+/bin/zsh -lc "mkdir -p .redeye && printf 'No findings.\\n' > .redeye/findings.md" in /Users/nick/code/roast.review
+ succeeded in 0ms:
+codex
+Review complete. No findings were identified; the result is in
+[findings.md](/Users/nick/code/roast.review/.redeye/findings.md).
+
+The focused tooling tests passed.
+tokens used
+25,266
+Review complete. No findings were identified; the result is in
+[findings.md](/Users/nick/code/roast.review/.redeye/findings.md).
+
+The focused tooling tests passed.

@@ -97,7 +97,7 @@ test('--quick false is read as false', async t => {
 
 test('empty diff exits 0 with NO_DIFF and no run', async t => {
     const r = await settingsRepo(t)
-    fs.writeFileSync(path.join(r.dir, '.gitignore'), '.roast.json\n')
+    fs.writeFileSync(path.join(r.dir, '.gitignore'), '.roast.jsonc\n')
     gitIn(r, ['add', '-A'])
     gitIn(r, ['commit', '-q', '-m', 'all'])
     const requests = requestRecorder(r)

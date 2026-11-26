@@ -67,7 +67,7 @@ export function seededRepo (t:CleanupTest):GateRepo {
     fs.writeFileSync(path.join(r.dir, 'b.txt'), 'b-committed\n')
     // Keep the stub and config out of the commits.
     fs.writeFileSync(path.join(r.dir, '.git', 'info', 'exclude'),
-        'node_modules/\n.roast.json\n')
+        'node_modules/\n.roast.jsonc\n')
     git(r.dir, r.env, 'add', '-A')
     git(r.dir, r.env, 'commit', '-qm', 'seed')
     fs.writeFileSync(path.join(r.dir, 'a.txt'), 'a-STAGED-NOT-COMMITTED\n')

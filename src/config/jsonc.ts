@@ -1,4 +1,4 @@
-// JSONC parsing for .roast.json (spec 02, section 3 "Parsing pipeline",
+// JSONC parsing for .roast.jsonc (spec 02, section 3 "Parsing pipeline",
 // step 1): comments and trailing commas allowed, exactly one value, and
 // objects with a null prototype so `__proto__` is an ordinary key.
 import { type Node, type ParseError, parseTree } from 'jsonc-parser'

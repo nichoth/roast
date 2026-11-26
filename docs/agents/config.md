@@ -5,7 +5,7 @@ lookup order is in `auth.md`.
 
 ## Loading
 
-- `loadConfig(path)` parses `.roast.json` as JSONC with exact-case keys
+- `loadConfig(path)` parses `.roast.jsonc` as JSONC with exact-case keys
   and unknown keys rejected. `version: 1` is required; a literal
   `api_key` is rejected. There are no built-in roles or models: a role
   missing from the config fails in `resolveRole`.

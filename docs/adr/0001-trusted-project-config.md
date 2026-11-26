@@ -9,7 +9,7 @@ never choose where reviewed code or credentials are sent. Roast is now
 installed as a project dependency, so the repository's lockfile already
 decides which Roast binary runs and its npm scripts can already run arbitrary
 code with the user's environment; refusing a config file no longer buys that
-protection. We therefore load every non-secret setting from `.roast.json`, but
+protection. We therefore load every non-secret setting from `.roast.jsonc`, but
 before using one that names a non-default endpoint, a credential variable, or a
 prompt-override file, Roast shows those values and requires explicit approval.
 
@@ -27,5 +27,5 @@ environment-variable bypass; CI approves explicitly with `npx roast trust --yes`
 - Keep endpoints and credential mapping in user-level config only: safest,
   but splits configuration across two homes and defeats the local-install
   goal.
-- Trust everything in `.roast.json` unconditionally: simplest, but lets a
+- Trust everything in `.roast.jsonc` unconditionally: simplest, but lets a
   cloned repository silently redirect a developer's provider key.

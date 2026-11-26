@@ -20,7 +20,7 @@ user-controlled and may be third-party services. Do not assume they are trusted
 for private source code: inspect the configuration or run `npx roast doctor`,
 and follow the operator's data-handling policy.
 
-Configure profiles in the project config, `.roast.json` (JSONC), found by
+Configure profiles in the project config, `.roast.jsonc` (JSONC), found by
 walking up from the working directory no further than the Git toplevel;
 `npx roast doctor` shows the path it uses, and `--config <path>` names another
 file. If there is none, `npx roast init` writes a starter. A profile selects

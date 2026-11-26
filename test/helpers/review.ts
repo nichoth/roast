@@ -207,7 +207,7 @@ export function anthropicProfileConfig (
     }
 }
 
-export function writeConfig (dir:string, cfg:object, name = '.roast.json') {
+export function writeConfig (dir:string, cfg:object, name = '.roast.jsonc') {
     fs.mkdirSync(dir, { recursive:true })
     fs.writeFileSync(path.join(dir, name), JSON.stringify(cfg, null, 2))
 }
