@@ -2,11 +2,10 @@
 
 An adversarial, cross-model code reviewer. Install as a project dependency.
 
-A finder model proposes defects in a Git diff, each with a
-code quote and a concrete fix. An independent verifier model checks surviving
-claims against the cited code. Findings can remain unresolved; see
-[Use](#use) for how to interpret the report. The two roles can use different
-providers, endpoints, and wire protocols.
+A finder model proposes defects in a Git diff, each with a code quote and
+a concrete fix. An independent verifier model checks claims against the
+cited code. Findings can remain unresolved. See [Use](#use) for how to interpret
+the report. The two roles can use different providers.
 
 In interactive mode, the models can navigate the local checkout
 via read-only file, grep, and listing tools.
@@ -557,9 +556,33 @@ npx roast init --finder-model 'claude-opus-5-5' --verifier-model 'gpt-6.1-terra'
 Review the current changes. The default command when no command is given.
 See [Use](#use) for examples and review behavior.
 
+#### `review --task <text>`
+
+The `--task` text is passed to the `finder` model.
+The text should describe what the builder was asked to do,
+including the **intent** or **expected behavior** of the change.
+This gives the finder context for judging the changes
+and helps it stay focused on the task. For example:
+
+```sh
+npx roast review --task 'retry transient API failures up to three times'
+```
+
+Roast puts the text under `Task (what the builder was asked to do)` in the
+finder's initial prompt, alongside the diff and current contents of the
+changed files. For a repository survey, the prompt includes a manifest instead
+of the diff and file contents. If omitted, the task is passed in
+as `(not provided)`.
+
+**The task is not passed directly to the verifier**. The verifier receives each
+finding and the cited file contents. The task may influence it indirectly
+through the finder's description. Task text can also be retained in local
+[run records](#run-records), so treat it as sensitive when appropriate.
+
+
 #### `review` Examples
 
-Give the reviewer context about the change.
+Describe the intended change to the finder.
 
 ```sh
 npx roast review --task 'add retry handling'
@@ -571,9 +594,16 @@ Review staged changes and fail on HIGH or more severe findings.
 npx roast review --staged --max-severity HIGH
 ```
 
-Let the finder navigate, or run a faster review without verification.
+Let the finder navigate
+
 ```sh
 npx roast review --interactive
+npx roast review --quick
+```
+
+Or run a faster review without verification.
+
+```sh
 npx roast review --quick
 ```
 
@@ -630,13 +660,30 @@ npx roast trust --yes
 ### `doctor`
 
 Check configuration, providers, and local integration. Pass `--json` for
-machine-readable output. See [Use](#use) for the checks performed.
+machine-readable output.
+
+The `npx roast doctor` command:
+
+* Reports the project config path and its trust state
+* Validates profiles and credentials
+* Checks each model-listing endpoint
+* Runs a small two-turn tool loop per configured model
+  (a tool call, its result, and the final submission, as a review does),
+  and reports Git, gate, and user-level Agent Skill status.
+  It does not probe the endpoints of a config this clone has not approved.
+
 
 #### `doctor` Example
 
+Check the setup in a terminal:
+
 ```sh
-# Check the setup in a terminal or produce machine-readable output.
 npx roast doctor
+```
+
+Or produce machine-readable output:
+
+```sh
 npx roast doctor --json
 ```
 
@@ -840,13 +887,6 @@ and retained, making the run partial. Check findings against the cited code.
 The finder and verifier must submit schema-validated results through a tool
 call. A role that never does gets bounded reminders within its limits; if it
 still fails, the run is reported incomplete, never clean.
-
-`npx roast doctor` reports the project config path and its trust state,
-validates profiles and credentials, checks each model-listing endpoint, runs a
-small two-turn tool loop per configured model (a tool call, its result, and
-the final submission, as a review does), and reports Git, gate, and
-user-level Agent Skill status. It does not probe the endpoints of a config
-this clone has not approved. `--json` gives machine-readable output.
 
 ## Resource limits
 
