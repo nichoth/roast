@@ -32,6 +32,7 @@ via read-only file, grep, and listing tools.
   * [Other settings](#other-settings)
   * [Network](#network)
 - [Trust](#trust)
+- [Commands](#commands)
 - [Use](#use)
 - [Resource limits](#resource-limits)
 - [Exit codes](#exit-codes)

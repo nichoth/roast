@@ -1,6 +1,6 @@
 {
   "name": "@substrate-system/roast",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Adversarial review",
   "license": "(MIT OR Apache-2.0)",
   "type": "module",
