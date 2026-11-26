@@ -712,7 +712,9 @@ npx roast runs --limit 5
 npx roast runs --json
 ```
 
-### `runs show`
+---
+
+### `runs show <run-id>`
 
 Print a stored report with `npx roast runs show <run-id>`.
 
@@ -723,6 +725,8 @@ Replace `<run-id>` with an ID from `npx roast runs`.
 ```sh
 npx roast runs show <run-id>
 ```
+
+---
 
 ### `runs checkout`
 
@@ -858,9 +862,9 @@ npx roast review --interactive                 # let the finder navigate
 npx roast review --quick                       # finder only, no verification
 npx roast review --scope repo                  # survey the whole repository
 npx roast runs                                 # list local runs
-npx roast runs show <run-id>
-npx roast runs checkout <run-id>
-npx roast doctor
+npx roast runs show <run-id>                   # Print a report
+npx roast runs checkout <run-id>               # Restore a saved snapshot
+npx roast doctor                               # Check everything
 ```
 
 The default scope is committed changes since the best available main branch,
