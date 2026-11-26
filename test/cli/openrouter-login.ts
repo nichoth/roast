@@ -67,8 +67,7 @@ test('OpenRouter approval uses S256 and exchanges the callback code',
         await response.text()
         t.equal((await result).code, 0)
         await portClosed(t, url)
-        const file = path.join(repo.dir, '.git', 'roast',
-            'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         t.equal((await loadCredentials(file)).get('openrouter')?.key,
             'sk-or-minted-approved', 'minted key stored for project')
         t.ok(!fs.existsSync(path.join(repo.env.XDG_CONFIG_HOME, 'roast')),
@@ -233,7 +232,7 @@ test('OpenRouter --no-browser exchanges a trimmed pasted code', async t => {
     t.ok(!url.searchParams.has('callback_url'), 'no callback in URL')
     t.equal((server.requests[0]?.body as { code?:string })?.code,
         'pasted-code')
-    const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+    const file = path.join(repo.dir, '.env.roast')
     t.equal((await loadCredentials(file)).get('openrouter')?.key,
         'sk-or-minted-pasted-code')
 })

@@ -4,6 +4,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { copyProjectCredentials } from '../credentials/credentials.js'
 import { git } from '../git/git.js'
 import { denylistedUntrackedRaw } from './denylist.js'
 
@@ -341,8 +342,11 @@ export async function restore (
             () => run(abs, ['checkout-index', '-a', '-f'], o))
         await step('read-tree (index)', o,
             () => run(abs, ['read-tree', snap.indexTree], o))
+        await copyProjectCredentials(repo, abs, o)
+        o.signal?.throwIfAborted()
     } catch (err) {
-        await removeWorktree(repo, abs, o).catch(() => {})
+        await removeWorktree(repo, abs, { ...o, signal:undefined })
+            .catch(() => {})
         throw err
     }
     return snap

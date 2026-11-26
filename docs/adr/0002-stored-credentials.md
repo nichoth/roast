@@ -10,16 +10,20 @@ which is the main thing standing between `npx roast init` and a first
 review. Roast now also reads a **stored credential**: a key for a built-in
 provider kept in a credentials file that `npx roast login` writes.
 
-There are two scopes. The project scope is
-`<git-common-dir>/roast/credentials.json`, next to the trust record
-(ADR-0001): it lives inside `.git`, so it cannot be committed, `git clone`
-never copies it, and linked worktrees share it. The user scope (`login
---global`) is `$XDG_CONFIG_HOME/roast/credentials.json`, falling back to
-`~/.config/roast/credentials.json`. Both are JSON with `version: 1` and a map
-from built-in provider name to a key and when it was stored; unknown
-providers and fields are rejected. Files are written atomically with mode
-0600 in a 0700 directory, and on Unix a file that group or others can read is
-an error telling the user to `chmod 600` it, never silently skipped.
+There are two scopes. The project scope uses `.env.roast` at the worktree
+root. It stores dotenv assignments for built-in providers. Roast checks
+that Git ignores the file before writing. Linked worktrees fall back to
+the primary checkout's file when they have no local file. Worktrees
+created by `npx roast runs checkout` receive a private copy.
+
+The original project store used
+`<git-common-dir>/roast/credentials.json`. Roast reads old keys until
+the next project login or logout moves them into the primary checkout's
+`.env.roast`. The user scope (`npx roast login --global`) uses JSON at
+`$XDG_CONFIG_HOME/roast/credentials.json`, falling back to
+`~/.config/roast/credentials.json`. It keeps the built-in provider name,
+key, and storage time. Roast writes both scopes atomically with mode
+0600 and rejects files that group or other users can read.
 
 Stored credentials rank below every environment variable, so CI and existing
 setups keep working unchanged. A role's credential is the first of

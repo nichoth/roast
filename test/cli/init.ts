@@ -25,7 +25,7 @@ async function initLoginRepo (t:CleanupTest, terminals:boolean) {
     t.cleanup(() => server.close())
     simulateTerminals(t, terminals)
     const opened = captureBrowser(t)
-    const project = path.join(repo.dir, '.git/roast/credentials.json')
+    const project = path.join(repo.dir, '.env.roast')
     const user = path.join(repo.env.XDG_CONFIG_HOME!, 'roast/credentials.json')
     const run = (stdin:string, args:Array<string> = [],
         env = repo.env) => runRoast(['init', ...args], {
@@ -134,7 +134,7 @@ test('init writes in cwd and ignores state at the repository toplevel',
         t.ok(fs.existsSync(path.join(cwd, '.roast.jsonc')))
         t.ok(!fs.existsSync(path.join(repo.dir, '.roast.jsonc')))
         t.equal(fs.readFileSync(path.join(repo.dir, '.gitignore'), 'utf8'),
-            'existing\n/.roast/\n')
+            'existing\n/.roast/\n/.env.roast\n/.env.roast.tmp-*\n')
         t.ok(!fs.existsSync(path.join(cwd, '.gitignore')))
     })
 

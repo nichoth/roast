@@ -58,6 +58,8 @@
   Tests fake an old Git with `fakeGit` matching on the argument list.
 - `restore` and `removeWorktree` strip `GIT_INDEX_FILE` from the env
   they are given (deliberate change 12); other functions honor it.
+- `restore` copies project credentials after restoring the index. The
+  copy comes from the current checkout, outside the captured trees.
 - `prune` takes fractional milliseconds: `runs prune` converts the Go
   duration without truncating, so `--older-than 1ns` stays positive
   instead of falling back to 30 days.

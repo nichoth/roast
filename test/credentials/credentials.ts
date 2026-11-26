@@ -55,9 +55,9 @@ function thrown (fn:() => unknown):Error|undefined {
     return undefined
 }
 
-test('project credentials live in the Git common directory', async t => {
+test('project credentials live at each worktree root', async t => {
     const r = repo(t)
-    const want = path.join(r.dir, '.git', 'roast', 'credentials.json')
+    const want = path.join(r.dir, '.env.roast')
     const sub = path.join(r.dir, 'a')
     fs.mkdirSync(sub)
     t.equal(await projectCredentialsPath(sub, { env:r.env }), want,
@@ -68,8 +68,15 @@ test('project credentials live in the Git common directory', async t => {
     git('commit', '-q', '--allow-empty', '-m', 'init')
     const linked = path.join(path.dirname(r.dir), 'linked')
     git('worktree', 'add', '-q', linked)
-    t.equal(await projectCredentialsPath(linked, { env:r.env }), want,
+    t.equal(await projectCredentialsPath(linked, { env:r.env }),
+        path.join(linked, '.env.roast'),
         'from a linked worktree')
+    await saveCredential(want, 'openai', KEY, new Date(), { env:r.env })
+    const store = await openCredentialStore(linked, r.env)
+    t.deepEqual(store.lookup('openai'), { key:KEY, scope:'project' },
+        'a manually linked worktree can use the primary checkout key')
+    t.ok(!fs.existsSync(path.join(linked, '.env.roast')),
+        'credential lookup leaves the linked checkout untouched')
 
     const outside = tempDir()
     t.cleanup(outside.remove)
@@ -239,6 +246,19 @@ test('save rejects bad input and bad existing files', async t => {
         'over-permissive existing file blocks saving')
 })
 
+test('save refuses a tracked project credential file', async t => {
+    const r = repo(t)
+    const file = path.join(r.dir, '.env.roast')
+    fs.writeFileSync(file, '# tracked placeholder\n', { mode:0o600 })
+    execFileSync('git', ['add', '--', path.basename(file)],
+        { cwd:r.dir, env:r.env })
+    const err = await rejects(saveCredential(file, 'openai', KEY,
+        new Date(), { env:r.env }))
+    t.ok(err?.message.includes('tracked by Git'), 'tracked file rejected')
+    t.equal(fs.readFileSync(file, 'utf8'), '# tracked placeholder\n',
+        'never wrote a key')
+})
+
 test('save tightens an existing 0755 directory', async t => {
     const file = credentialsIn(scratch(t))
     fs.mkdirSync(path.dirname(file), { mode:0o755 })
@@ -266,7 +286,7 @@ test('delete removes one provider and keeps the others', async t => {
 // A temp repo plus its project and user credentials paths.
 function storeRepo (t:CleanupTest) {
     const r = repo(t)
-    const project = path.join(r.dir, '.git', 'roast', 'credentials.json')
+    const project = path.join(r.dir, '.env.roast')
     const user = path.join(r.env.XDG_CONFIG_HOME, 'roast',
         'credentials.json')
     return { ...r, project, user }

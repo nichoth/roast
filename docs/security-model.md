@@ -88,12 +88,13 @@ the project config: from the environment, or from a stored credential
   protocol, never by anything the project config names, so a profile on a
   custom endpoint never receives one, and neither does a role an override
   moved off its provider's endpoint.
-- The project-scope credentials file is
-  `<git-common-dir>/roast/credentials.json`, inside `.git`, so it is never
-  committed or cloned. The user-scope file is
+- The project-scope credentials file is `.env.roast` at the worktree root.
+  Roast checks that Git ignores it before writing, and
+  `npx roast runs checkout` copies the current project credentials to the
+  restored worktree. The user-scope file is
   `$XDG_CONFIG_HOME/roast/credentials.json` (or
-  `~/.config/roast/credentials.json`). Both are written with mode 0600 in a
-  0700 directory. On Unix, a credentials file that group or others can read
+  `~/.config/roast/credentials.json`). Roast writes both files with mode
+  0600. On Unix, a credentials file that group or others can read
   stops resolution with an error instead of being skipped.
 - `npx roast login <provider>` stores a credential in the project scope, or
   the user scope with `--global`. For Anthropic and OpenAI the user pastes a

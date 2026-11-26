@@ -15,10 +15,13 @@
 
 ## Store
 
-- Project scope is `<git-common-dir>/roast/credentials.json` (shared
-  with `trust.json`); user scope is
+- Project scope is `<worktree>/.env.roast` in dotenv format, with the
+  primary checkout as a fallback. User scope is JSON at
   `$XDG_CONFIG_HOME/roast/credentials.json`, else
   `~/.config/roast/credentials.json`.
+- Project login and logout migrate legacy keys from
+  `<git-common-dir>/roast/credentials.json` into the primary checkout.
+  Project writes verify the file is untracked and ignored first.
 - `loadProjectConfig` attaches `openCredentialStore(ctx.cwd, ctx.env)`
   through `withStoredCredentials`; any new path that resolves roles
   from a `loadConfig` result must attach it too, or stored keys are
@@ -27,8 +30,8 @@
 - `CredentialStore.lookup` is synchronous (roles resolve
   synchronously), so the async open resolves both scope paths up front
   and lookup reads files lazily with sync `fs`, caching only successful
-  loads. Decode with the strict zod schema but read the validated input,
-  as `config/load.ts` does.
+  loads. The JSON reader decodes with the strict zod schema but reads
+  the validated input, as `config/load.ts` does.
 - Files are read lazily: a bad file fails resolution only when a role
   reaches it (no env credential first). `roast doctor` also loads each
   scope's file that exists (results `project-credentials` /
@@ -55,7 +58,7 @@
 
 ## Tests
 
-- Put files at `<repo>/.git/roast/credentials.json` and
+- Put files at `<repo>/.env.roast` and
   `$XDG_CONFIG_HOME/roast/credentials.json` from `tempRepo().env`.
 - `providerServer` (`test/helpers/provider-server.ts`) answers
   `GET /v1/models` for key validation; `answerModels` sets the status

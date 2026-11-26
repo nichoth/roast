@@ -71,7 +71,7 @@ test('no-argument login stops on failure while keeping earlier keys',
             },
             roles:{ finder:{ profile:'a' }, verifier:{ profile:'o' } },
         }))
-        const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         simulateTerminals(t, false)
         const noninteractive = await runRoast(['login'], {
             cwd:repo.dir, env:repo.env, redirectTo:server.url,
@@ -109,7 +109,7 @@ test('no-argument login rejects broken stored files before opening browser',
             inference_profiles:{ a:{ protocol:'anthropic', model:'claude' } },
             roles:{ finder:{ profile:'a' } },
         }))
-        const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         fs.mkdirSync(path.dirname(file), { recursive:true })
         fs.writeFileSync(file, '{"key":"private-broken-key"', { mode:0o600 })
         const before = fs.readFileSync(file, 'utf8')
@@ -158,8 +158,7 @@ test('no-argument login skips every credential source before terminal check',
             simulateTerminals(t, true)
             const opened = captureBrowser(t)
             const env = { ...repo.env }
-            const project = path.join(repo.dir, '.git', 'roast',
-                'credentials.json')
+            const project = path.join(repo.dir, '.env.roast')
             const user = path.join(env.XDG_CONFIG_HOME, 'roast',
                 'credentials.json')
             if (source === 'project' || source === 'user') {
@@ -238,7 +237,7 @@ test('no-argument login reads both providers from one stdin in role order',
             ['sk-anthropic-first', 'Bearer sk-openai-second'],
             'finder precedes verifier regardless of config order')
         const entries = await loadCredentials(path.join(repo.dir,
-            '.git', 'roast', 'credentials.json'))
+            '.env.roast'))
         t.equal(entries.get('anthropic')?.key, 'sk-anthropic-first',
             'first answer saved for finder')
         t.equal(entries.get('openai')?.key, 'sk-openai-second',
@@ -482,8 +481,7 @@ test('login retries rejected keys and stores only the accepted key',
         t.equal(result.code, 0, 'login succeeds on the second attempt')
         t.deepEqual(server.credentials, ['rejected', 'accepted'],
             'checks stop after the accepted key')
-        const file = path.join(repo.dir, '.git', 'roast',
-            'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         t.equal((await loadCredentials(file)).get('anthropic')?.key,
             'accepted', 'only the accepted key is stored')
     })
@@ -508,8 +506,8 @@ test('login openai --global validates Bearer auth and stores user scope',
             'credentials.json')
         t.equal((await loadCredentials(user)).get('openai')?.key, key,
             'user file contains the key')
-        t.ok(!fs.existsSync(path.join(repo.dir, '.git', 'roast',
-            'credentials.json')), 'no project file')
+        t.ok(!fs.existsSync(path.join(repo.dir, '.env.roast')),
+            'no project file')
         t.deepEqual(server.credentials, [`Bearer ${key}`],
             'validation uses Bearer authorization')
         t.equal(server.requests[0]?.method, 'GET', 'GET check')
@@ -531,12 +529,12 @@ test('login anthropic stores a trimmed project key privately', async t => {
         redirectTo:server.url,
     })
     t.equal(result.code, 0, 'login succeeds')
-    const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+    const file = path.join(repo.dir, '.env.roast')
     t.equal((await loadCredentials(file)).get('anthropic')?.key, key,
         'trimmed key is stored')
     t.equal(fs.statSync(file).mode & 0o777, 0o600, 'private file')
-    t.equal(fs.statSync(path.dirname(file)).mode & 0o777, 0o700,
-        'private directory')
+    t.equal(fs.readFileSync(file, 'utf8'),
+        'ANTHROPIC_API_KEY=' + key + '\n', 'dotenv assignment')
     t.deepEqual(server.credentials, [key], 'validation carries the key')
     t.deepEqual(result.hosts, ['api.anthropic.com'], 'built-in endpoint')
 })
@@ -589,8 +587,7 @@ test('logging in again replaces the key resolved by project config',
             })
             t.equal(result.code, 0, 'login succeeds')
         }
-        const file = path.join(repo.dir, '.git', 'roast',
-            'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         const entries = await loadCredentials(file)
         t.equal(entries.get('anthropic')?.key, keys[1], 'new key replaces old')
         t.equal(entries.size, 1, 'one provider entry')

@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { test } from '../helpers/test.js'
 import { tempDir, tempRepo } from '../helpers/repo.js'
@@ -11,13 +12,37 @@ import {
     saveCredential,
 } from '../../src/credentials/credentials.js'
 
+test('project logout migrates legacy keys for linked worktrees', async t => {
+    const repo = tempRepo()
+    t.cleanup(repo.remove)
+    const old = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+    await saveCredential(old, 'anthropic', 'old-anthropic', new Date())
+    await saveCredential(old, 'openai', 'old-openai', new Date())
+    const git = (...args:string[]) => execFileSync('git', args,
+        { cwd:repo.dir, env:repo.env, stdio:'ignore' })
+    git('commit', '-q', '--allow-empty', '-m', 'init')
+    const linked = path.join(path.dirname(repo.dir), 'linked')
+    git('worktree', 'add', '-q', linked)
+
+    const result = await runRoast(['logout', 'openai'], {
+        cwd:linked, env:repo.env,
+    })
+    t.equal(result.code, 0, result.stderr)
+    t.ok(!fs.existsSync(old), 'legacy file removed after migration')
+    const local = await loadCredentials(path.join(linked, '.env.roast'))
+    t.deepEqual([...local.keys()], ['anthropic'], 'logout applies locally')
+    const primary = await loadCredentials(path.join(repo.dir, '.env.roast'))
+    t.equal(primary.get('openai')?.key, 'old-openai',
+        'primary checkout keeps its key')
+})
+
 test('logout removes only the named project key from role resolution',
     async t => {
         const repo = tempRepo()
         t.cleanup(repo.remove)
         const server = await providerServer()
         t.cleanup(() => server.close())
-        const file = path.join(repo.dir, '.git', 'roast', 'credentials.json')
+        const file = path.join(repo.dir, '.env.roast')
         await saveCredential(file, 'anthropic', 'sk-anthropic', new Date())
         await saveCredential(file, 'openai', 'sk-openai', new Date())
         fs.writeFileSync(path.join(repo.dir, '.roast.jsonc'), JSON.stringify({
@@ -97,8 +122,7 @@ test('logout deletes named or all providers only in the selected scope',
             for (const name of ['anthropic', undefined]) {
                 const repo = tempRepo()
                 t.cleanup(repo.remove)
-                const project = path.join(repo.dir, '.git', 'roast',
-                    'credentials.json')
+                const project = path.join(repo.dir, '.env.roast')
                 const user = path.join(repo.env.XDG_CONFIG_HOME, 'roast',
                     'credentials.json')
                 for (const file of [project, user]) {

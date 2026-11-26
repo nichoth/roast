@@ -32,7 +32,7 @@ function storedRepo (t:CleanupTest) {
             verifier:{ profile:'gateway' },
         },
     }))
-    const project = path.join(r.dir, '.git', 'roast', 'credentials.json')
+    const project = path.join(r.dir, '.env.roast')
     const ctx = (env:Record<string, string> = {}) => ({
         cwd:r.dir,
         env:{ ...r.env, ...env },

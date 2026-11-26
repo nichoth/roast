@@ -5,6 +5,7 @@ import { builtinProviders, lookupProvider } from '../config/provider.js'
 import {
     deleteCredential,
     loadCredentials,
+    prepareProjectCredentials,
 } from '../credentials/credentials.js'
 import { goQuote } from '../gocompat/strings.js'
 import type { CommandDef } from './command.js'
@@ -27,6 +28,10 @@ export async function runLogout (
     }
     const providers = named ? [named] : builtinProviders()
     const target = await loginPath(global, ctx)
+    const opts = { env:ctx.env, signal:ctx.signal }
+    if (target.scope === 'project') {
+        await prepareProjectCredentials(target.path, opts)
+    }
     const entries = await loadCredentials(target.path)
     for (const provider of providers) {
         if (!entries.has(provider.name)) {
@@ -36,7 +41,7 @@ export async function runLogout (
             }
             continue
         }
-        await deleteCredential(target.path, provider.name)
+        await deleteCredential(target.path, provider.name, opts)
         ctx.stdout.write(`removed ${provider.name} credential ` +
             `(${target.scope} scope)\n`)
         ctx.stderr.write(`The key was not revoked at ${provider.name}; ` +

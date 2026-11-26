@@ -5,6 +5,7 @@ import path from 'node:path'
 import { test, type CleanupTest } from '../helpers/test.js'
 import { runRoast } from '../helpers/run.js'
 import { tempDir, tempRepo } from '../helpers/repo.js'
+import { gitOk } from '../../src/git/git.js'
 import {
     approveProjectConfig,
     gitIn,
@@ -60,6 +61,24 @@ test('runs checkout materializes the reviewed state', async t => {
     t.equal(res.stdout, dest + '\n', 'stdout is only the destination')
     t.equal(fs.readFileSync(path.join(dest, 'main.go'), 'utf8'),
         reviewedFile(r), 'reviewed content')
+})
+
+test('runs checkout copies current project credentials privately', async t => {
+    const { r, id } = await reviewed(t)
+    const name = '.env.roast'
+    const body = 'OPENAI_API_KEY=checkout-test-key\n'
+    fs.writeFileSync(path.join(r.dir, name), body, { mode:0o600 })
+    const dest = outside(t, r)
+    const res = await r.roast(['runs', 'checkout', id, dest])
+    t.equal(res.code, 0, res.stderr)
+    const copied = path.join(dest, name)
+    t.equal(fs.existsSync(copied) && fs.readFileSync(copied, 'utf8'), body,
+        'credential from the source checkout')
+    t.equal(fs.existsSync(copied) && (fs.statSync(copied).mode & 0o777),
+        0o600, 'private copy')
+    t.ok(await gitOk(dest, ['check-ignore', '-q', '--', name],
+        { env:r.env }), 'destination ignores the copy')
+    t.ok(!res.stdout.includes('checkout-test-key'), 'key stays off stdout')
 })
 
 test('a relative destination lands under the working directory',

@@ -1,15 +1,22 @@
-// Stored provider keys (spec 03, 2.12 and 2.13, ADR-0002). Keys saved by
-// `login` live in credentials.json in two scopes: project, under the Git
-// common directory beside trust.json, and user, under the XDG config
-// directory. A key never appears in an error message.
+// Keys saved by login live in .env.roast at the worktree root or in
+// credentials.json under the user config directory (ADR-0002).
 import fs from 'node:fs'
+import { lstat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import type { StoredCredentials } from '../config/credential.js'
 import { lookupProvider } from '../config/provider.js'
 import { writeFileAtomic } from '../fsutil/atomic.js'
 import { compareBytes, goTrimSpace } from '../gocompat/strings.js'
-import { stateDir, type TrustOpts } from '../trust/trust.js'
+import { git, gitRoot, type GitRunOpts } from '../git/git.js'
+import { stateDir } from '../trust/trust.js'
+import {
+    decodeDotenv, encodeDotenv,
+    PROJECT_CREDENTIALS_FILE, PROJECT_CREDENTIALS_TEMP_PREFIX,
+} from './dotenv.js'
+import {
+    assertProjectCredentialUntracked, protectProjectCredential,
+} from './project-ignore.js'
 
 export const CREDENTIALS_FILE = 'credentials.json'
 const CURRENT_VERSION = 1
@@ -52,13 +59,13 @@ function envValue (env:Env, name:string):string {
     return typeof v === 'string' ? v : ''
 }
 
-// <git-common-dir>/roast/credentials.json for the repository holding dir.
+// The file belongs to the worktree holding dir.
 export async function projectCredentialsPath (
     dir:string,
-    opts:TrustOpts = {}
+    opts:GitRunOpts = {}
 ):Promise<string> {
     try {
-        return path.join(await stateDir(dir, opts), CREDENTIALS_FILE)
+        return path.join(await gitRoot(dir, opts), PROJECT_CREDENTIALS_FILE)
     } catch (err) {
         if (opts.signal?.aborted) throw err
         throw new Error(`project credentials: ${message(err)}`,
@@ -143,27 +150,34 @@ function isCode (err:unknown, code:string):boolean {
     return (err as NodeJS.ErrnoException)?.code === code
 }
 
+function isProjectFile (file:string):boolean {
+    return path.basename(file) === PROJECT_CREDENTIALS_FILE
+}
+
 // The synchronous loader behind loadCredentials and the store's lookup
 // (the files are tiny). A missing file holds no credentials; a file any
 // group or other user may access is an error, never skipped.
-export function loadCredentialsSync (file:string):Map<string, Entry> {
+function readPrivateFile (file:string):string|null {
     let fd:number
     try {
-        fd = fs.openSync(file, 'r')
+        fd = fs.openSync(file, isProjectFile(file) ?
+            fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW |
+                fs.constants.O_NONBLOCK : 'r')
     } catch (err) {
-        if (isCode(err, 'ENOENT')) return new Map()
+        if (isCode(err, 'ENOENT')) return null
         throw new Error(`read credentials: ${message(err)}`, { cause:err })
     }
-    let text:string
     try {
-        const perm = fs.fstatSync(fd).mode & 0o777
+        const stat = fs.fstatSync(fd)
+        if (!stat.isFile()) throw new Error(`${file} is not a regular file`)
+        const perm = stat.mode & 0o777
         if ((perm & 0o077) !== 0) {
             throw new Error(`credentials file ${file} is readable by ` +
                 `other users (mode ${permString(perm)}); run ` +
                 `\`chmod 600 ${file}\``)
         }
         try {
-            text = fs.readFileSync(fd, 'utf8')
+            return fs.readFileSync(fd, 'utf8')
         } catch (err) {
             throw new Error(`read credentials: ${message(err)}`,
                 { cause:err })
@@ -171,7 +185,16 @@ export function loadCredentialsSync (file:string):Map<string, Entry> {
     } finally {
         fs.closeSync(fd)
     }
+}
+
+export function loadCredentialsSync (file:string):Map<string, Entry> {
+    const text = readPrivateFile(file)
+    if (text === null) return new Map()
     try {
+        if (isProjectFile(file)) {
+            return new Map([...decodeDotenv(text)].map(([name, key]) =>
+                [name, { key, storedAt:ZERO_TIME }]))
+        }
         return decode(text)
     } catch (err) {
         throw new Error(`credentials file ${file}: ${message(err)}`)
@@ -193,8 +216,14 @@ function formatStoredAt (d:Date):string {
 
 async function writeCredentials (
     file:string,
-    entries:Map<string, Entry>
+    entries:Map<string, Entry>,
+    opts:GitRunOpts
 ):Promise<void> {
+    if (isProjectFile(file)) {
+        const keys = new Map([...entries].map(([name, { key }]) =>
+            [name, key]))
+        return writeProjectFile(file, encodeDotenv(keys), opts)
+    }
     const providers:Record<string, { key:string, stored_at:string }> =
         Object.create(null)
     for (const name of [...entries.keys()].sort(compareBytes)) {
@@ -212,13 +241,26 @@ async function writeCredentials (
     })
 }
 
+async function writeProjectFile (
+    file:string, body:string, opts:GitRunOpts
+):Promise<void> {
+    await protectProjectCredential(path.dirname(file), opts)
+    opts.signal?.throwIfAborted()
+    await writeFileAtomic(file, body, {
+        mode:0o600,
+        tempPrefix:PROJECT_CREDENTIALS_TEMP_PREFIX,
+        errorPrefix:'write project credentials',
+    })
+}
+
 // Stores `key` for `provider`, replacing any previous entry. The key is
 // stored as given; an unusable existing file aborts the save.
 export async function saveCredential (
     file:string,
     provider:string,
     key:string,
-    storedAt:Date
+    storedAt:Date,
+    opts:GitRunOpts = {}
 ):Promise<void> {
     if (!lookupProvider(provider)) {
         throw new Error('save credential: unknown provider ' +
@@ -229,7 +271,7 @@ export async function saveCredential (
     }
     const entries = await loadCredentials(file)
     entries.set(provider, { key, storedAt:formatStoredAt(storedAt) })
-    await writeCredentials(file, entries)
+    await writeCredentials(file, entries, opts)
 }
 
 export interface ScopePaths {
@@ -281,10 +323,12 @@ export async function openCredentialStore (
     let project = ''
     if (dir !== '') {
         try {
-            project = await projectCredentialsPath(dir, {
+            const gitOpts = {
                 signal:opts.signal,
                 env:env as NodeJS.ProcessEnv,
-            })
+            }
+            project = await projectCredentialsPath(dir, gitOpts)
+            project = await readableProjectPath(project, gitOpts)
         } catch (err) {
             if (opts.signal?.aborted) throw err
         }
@@ -301,9 +345,100 @@ export async function openCredentialStore (
 // Removes `provider`'s entry. A missing file or entry writes nothing.
 export async function deleteCredential (
     file:string,
-    provider:string
+    provider:string,
+    opts:GitRunOpts = {}
 ):Promise<void> {
     const entries = await loadCredentials(file)
     if (!entries.delete(provider)) return
-    await writeCredentials(file, entries)
+    await writeCredentials(file, entries, opts)
+}
+
+async function exists (file:string):Promise<boolean> {
+    try {
+        await lstat(file)
+        return true
+    } catch (err) {
+        if (isCode(err, 'ENOENT')) return false
+        throw err
+    }
+}
+
+async function legacyPath (file:string, opts:GitRunOpts):Promise<string> {
+    const dir = await stateDir(path.dirname(file), opts)
+    return path.join(dir, CREDENTIALS_FILE)
+}
+
+async function primaryProjectPath (
+    file:string, opts:GitRunOpts
+):Promise<string> {
+    const list = await git(path.dirname(file),
+        ['worktree', 'list', '--porcelain', '-z'], opts)
+    const fields = list.toString('utf8').split('\0')
+    const first = fields[0]
+    if (!first?.startsWith('worktree ') || fields[1] === 'bare') {
+        return file
+    }
+    return path.join(first.slice('worktree '.length),
+        PROJECT_CREDENTIALS_FILE)
+}
+
+async function readableProjectPath (
+    file:string, opts:GitRunOpts
+):Promise<string> {
+    if (await exists(file)) return file
+    const primary = await primaryProjectPath(file, opts)
+    if (primary !== file && await exists(primary)) return primary
+    const legacy = await legacyPath(file, opts)
+    return await exists(legacy) ? legacy : file
+}
+
+async function migrateLegacyCredentials (
+    legacy:string, primary:string, opts:GitRunOpts
+):Promise<void> {
+    const entries = await loadCredentials(legacy)
+    for (const [name, entry] of await loadCredentials(primary)) {
+        entries.set(name, entry)
+    }
+    await writeCredentials(primary, entries, opts)
+    try {
+        await unlink(legacy)
+    } catch (err) {
+        if (!isCode(err, 'ENOENT')) throw err
+    }
+}
+
+// Local writes start with the inherited keys. Migration puts old shared
+// keys in the primary checkout so other worktrees can still find them.
+export async function prepareProjectCredentials (
+    file:string, opts:GitRunOpts
+):Promise<void> {
+    const legacy = await legacyPath(file, opts)
+    const migrate = await exists(legacy)
+    if (!migrate && await exists(file)) return
+    const primary = await primaryProjectPath(file, opts)
+    if (migrate) await migrateLegacyCredentials(legacy, primary, opts)
+    if (primary === file || await exists(file)) return
+    const body = readPrivateFile(primary)
+    if (body !== null) await writeProjectFile(file, body, opts)
+}
+
+export async function copyProjectCredentials (
+    source:string, dest:string, opts:GitRunOpts
+):Promise<void> {
+    const file = path.join(source, PROJECT_CREDENTIALS_FILE)
+    const from = await readableProjectPath(file, opts)
+    const body = readPrivateFile(from)
+    if (body === null) return
+    if (isProjectFile(from)) {
+        await assertProjectCredentialUntracked(path.dirname(from), opts)
+    }
+    const target = path.join(dest, PROJECT_CREDENTIALS_FILE)
+    if (await exists(target)) {
+        throw new Error(`restored snapshot already contains ${target}`)
+    }
+    if (isProjectFile(from)) {
+        await writeProjectFile(target, body, opts)
+    } else {
+        await writeCredentials(target, decode(body), opts)
+    }
 }

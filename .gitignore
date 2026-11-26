@@ -5,5 +5,7 @@ WIP.md
 node_modules
 .DS_Store
 .env
+/.env.roast
+/.env.roast.tmp-*
 test/*.js
 ralph_tiiny.sh

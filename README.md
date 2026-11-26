@@ -33,6 +33,25 @@ via read-only file, grep, and listing tools.
   * [Network](#network)
 - [Trust](#trust)
 - [Commands](#commands)
+  * [`init`](#init)
+  * [`review`](#review)
+  * [`login`](#login)
+  * [`logout`](#logout)
+  * [`trust`](#trust)
+  * [`doctor`](#doctor)
+  * [`ignore`](#ignore)
+  * [`runs`](#runs)
+  * [`runs show`](#runs-show)
+  * [`runs checkout`](#runs-checkout)
+  * [`runs prune`](#runs-prune)
+  * [`gate`](#gate)
+  * [`gate enable`](#gate-enable)
+  * [`gate status`](#gate-status)
+  * [`gate disable`](#gate-disable)
+  * [`gate settings`](#gate-settings)
+  * [`skill`](#skill)
+  * [`skill install`](#skill-install)
+  * [`skill status`](#skill-status)
 - [Use](#use)
 - [Resource limits](#resource-limits)
 - [Exit codes](#exit-codes)
@@ -73,8 +92,9 @@ npm i -D @substrate-system/roast
 npx roast init
 ```
 
-This writes `.roast.jsonc` in the current directory and adds `/.roast/` to
-`.gitignore`. Model flags route each role by its model ID:
+This writes `.roast.jsonc` in the current directory and adds ignore rules for
+`.roast/` and `.env.roast` to the repository root's `.gitignore`.
+Model flags route each role by its model ID:
 
 - a bare Claude model ID (`claude-opus-5-5`) uses Anthropic's Messages API
 - a bare OpenAI model ID (including Codex, `gpt-6.1-terra`) uses OpenAI's
@@ -86,38 +106,23 @@ This writes `.roast.jsonc` in the current directory and adds `/.roast/` to
 Either model can fill either role. It's recommended to use models
 from different providers for each role.
 
-In an interactive terminal, `init` prompts for each role's provider
-and model when the corresponding flag is missing. Choose Anthropic, OpenAI,
-OpenRouter, or Custom. Built-in providers suggest a model that Enter accepts.
-Custom asks for an endpoint URL, protocol (`chat`, `responses`, or
-`anthropic`), credential variable name, and model ID. The protocol defaults
-to `chat`; a blank credential variable uses the role's key variable unless
-a previous custom choice supplies the default. A blank model leaves a
-placeholder to edit. A custom model ID stays on the chosen
-endpoint, even when it has a slash. You can also configure a custom profile
-by editing `.roast.jsonc` (see [Project config](#project-config)).
+Will prompt for each role's provider and model when the corresponding flag
+is missing. Choose Anthropic, OpenAI, OpenRouter, or Custom.
+Custom asks for an endpoint URL, protocol (`chat`, `responses`, or `anthropic`),
+credential variable name, and model ID.
 
-Without an interactive terminal, `init` writes placeholder model IDs for
-missing model flags and prints a hint naming those flags. Before a review,
-replace the models needed by that review in `.roast.jsonc` or supply them with
-review flags. For example, `npx roast review --finder-model MODEL --no-verify`
-does not need a verifier model. Init model flags use the routing above;
-configure a custom endpoint interactively or in project config.
+The protocol defaults to `chat`. A blank credential variable uses the role's
+key variable unless a previous custom choice supplies the default.
+A blank model leaves a placeholder to edit. A custom model ID stays
+on the chosen endpoint, even when it has a slash. You can also configure a
+custom profile by editing `.roast.jsonc`
+(see [Project config](#project-config)).
 
-In the terminal, `init` then offers to log in to each built-in provider
+Command `init` will offer to log in to each built-in provider
 used by a role that has no credential yet
 (see [Login and logout](#login-and-logout)).
 
 Flag `--no-login` skips the login process.
-
-When the written config needs trust approval -- for example because it
-names a custom endpoint or a non-standard credential variable -- `init`
-prints a summary of every security-relevant value and asks whether to
-approve. The default is No. Answering Yes records the approval so the
-first review is not refused; answering No (or pressing Enter) skips
-approval and `init` still succeeds. You can approve later with
-`npx roast trust`. The trust offer only appears in an interactive
-terminal.
 
 
 #### `init` Example
@@ -125,30 +130,31 @@ terminal.
 Claude as the finder and Codex as the verifier:
 
 ```sh
-npx roast init --finder-model 'claude-opus-5-5' \
-  --verifier-model 'gpt-6.1-terra'
+npx roast init --finder-model 'claude-opus-5-5' --verifier-model 'gpt-6.2-sol'
 ```
 
-`init` refuses to overwrite an existing `.roast.jsonc`.
-
+---
 
 ### 3. Login
 
-If you skipped login for a built-in provider during `init`, log in now:
+If you skipped login for a built-in provider during `init`, login now:
 
 ```sh
 npx roast login
 ```
 
-With no argument, `login` reads `.roast.jsonc` and logs in to each built-in
-provider that has no credentials yet. For Anthropic and OpenAI,
-it opens the provider's API-keys page. Create a key and paste it into the
-hidden prompt. For OpenRouter, it opens OpenRouter in your browser and
-receives a new key when you approve. The key is stored for this project
-inside `.git`, so it is never committed. Reviews, including the
-[pre-commit gate](#pre-commit-gate), can use it for that provider.
-Custom endpoints do not use stored credentials; set the variable named by
-`api_key_env` or the appropriate role key instead.
+With no argument, `login` reads `.roast.jsonc` and signs in to each built-in
+provider that has no credentials yet.
+
+For Anthropic and OpenAI, it opens the provider's API-keys page.
+Create a key and paste it into the prompt.
+For OpenRouter, it opens OpenRouter in your browser and
+receives a new key when you approve.
+
+The key is stored in the gitignored `.env.roast` at the repository root.
+Reviews, including the [pre-commit gate](#pre-commit-gate),
+can use it for that provider. Custom endpoints do not use stored credentials.
+Set the variable named by `api_key_env` or the appropriate role key instead.
 
 Environment variables still work and take precedence over a stored key,
 which suits CI:
@@ -369,21 +375,27 @@ login. Login prints only the provider and scope it stored, never the key.
 
 Keys are stored in one of two scopes:
 
-- **Project** (the default): `.git/roast/credentials.json`, in the Git common
-  directory. It is never committed or copied by `git clone`, and linked
-  worktrees share it. Outside a Git repository, use `--global`.
+- **Project** (the default) uses `.env.roast` at the worktree root, with
+  entries such as `OPENAI_API_KEY=…`. Roast checks that Git ignores the file
+  before writing to it. A linked worktree without its own file can use the
+  primary checkout's file. Outside a Git repository, use `--global`.
 - **User** (`--global`): `$XDG_CONFIG_HOME/roast/credentials.json`, or
   `~/.config/roast/credentials.json` when `XDG_CONFIG_HOME` is unset.
 
-Both files are written with mode 0600 in a 0700 directory. On Unix, Roast
+Roast writes both files with mode 0600. On Unix, Roast
 refuses a credentials file that group or others can read and says to
 `chmod 600` it. `npx roast doctor` reports a credentials file that is too
 open or does not parse.
 
+Roast can still read the previous project credential store. The next
+project login or logout moves those keys into the primary checkout's
+`.env.roast`.
+
 `npx roast logout [provider]` removes the stored key for one provider, or
 for every provider with no argument, from the project scope, or the user
-scope with `--global`. It does not revoke the key at the provider; revoke it
-on the provider's key page, which `logout` names.
+scope with `--global`. In a linked worktree, project login and logout
+update that worktree's own file. To revoke a key, use the provider's key
+page, which `logout` names.
 
 ### OpenRouter
 
@@ -518,6 +530,275 @@ that bypasses trust. The [security model](docs/security-model.md) explains the
 design.
 
 ## Commands
+
+### `init`
+
+Write a starter `.roast.jsonc` in the current directory. See
+[Quick start](#2-create-the-project-config) for setup and model options.
+
+#### `init` Example
+
+Set up interactively
+
+```sh
+npx roast init
+```
+
+Or pass in models to skip the login prompts:
+
+```sh
+npx roast init --finder-model 'claude-opus-5-5' --verifier-model 'gpt-6.1-terra' --no-login
+```
+
+---
+
+### `review`
+
+Review the current changes. The default command when no command is given.
+See [Use](#use) for examples and review behavior.
+
+#### `review` Examples
+
+Give the reviewer context about the change.
+
+```sh
+npx roast review --task 'add retry handling'
+```
+
+Review staged changes and fail on HIGH or more severe findings.
+
+```sh
+npx roast review --staged --max-severity HIGH
+```
+
+Let the finder navigate, or run a faster review without verification.
+```sh
+npx roast review --interactive
+npx roast review --quick
+```
+
+Survey the repository instead of reviewing a diff.
+
+```sh
+npx roast review --scope repo
+```
+
+---
+
+### `login`
+
+Store API keys for the configured built-in providers, or specify a provider
+to store one key. See [Login and logout](#login-and-logout).
+
+#### `login` Example
+
+```sh
+# Log in to configured providers, or to a specific provider.
+npx roast login
+npx roast login anthropic
+# Store a user-level key, or log in without opening a browser.
+npx roast login openrouter --global
+npx roast login openrouter --no-browser
+```
+
+### `logout`
+
+Remove stored API keys, optionally for a single provider. See
+[Login and logout](#login-and-logout).
+
+#### `logout` Example
+
+```sh
+# Remove one project's key or all user-level keys.
+npx roast logout anthropic
+npx roast logout --global
+```
+
+### `trust`
+
+Inspect and approve the project's security-relevant configuration. See
+[Trust](#trust).
+
+#### `trust` Example
+
+```sh
+# Inspect and approve interactively, or approve in CI.
+npx roast trust
+npx roast trust --yes
+```
+
+### `doctor`
+
+Check configuration, providers, and local integration. Pass `--json` for
+machine-readable output. See [Use](#use) for the checks performed.
+
+#### `doctor` Example
+
+```sh
+# Check the setup in a terminal or produce machine-readable output.
+npx roast doctor
+npx roast doctor --json
+```
+
+### `ignore`
+
+Add `/.roast/` to the Git toplevel `.gitignore`. `init` also runs this
+command. See [Run records](#run-records).
+
+#### `ignore` Example
+
+```sh
+npx roast ignore
+```
+
+### `runs`
+
+List past review runs. Use `--limit N` to limit the list or `--json` to
+print raw index lines. See [Run records](#run-records).
+
+#### `runs` Example
+
+```sh
+# List recent runs, limit the result, or print raw index lines.
+npx roast runs
+npx roast runs --limit 5
+npx roast runs --json
+```
+
+### `runs show`
+
+Print a stored report with `npx roast runs show <run-id>`.
+
+#### `runs show` Example
+
+Replace `<run-id>` with an ID from `npx roast runs`.
+
+```sh
+npx roast runs show <run-id>
+```
+
+### `runs checkout`
+
+Restore a saved snapshot into a detached linked worktree with
+`npx roast runs checkout <run-id> [dir]`. See [Run records](#run-records).
+
+#### `runs checkout` Example
+
+Replace `<run-id>` with the ID of a run that has a saved snapshot.
+
+```sh
+# Use the default worktree location or choose a directory.
+npx roast runs checkout <run-id>
+npx roast runs checkout <run-id> ../roast-snapshot
+```
+
+### `runs prune`
+
+Delete old snapshot refs with `npx roast runs prune`. The default age is
+720 hours; `--older-than` changes it and `--dry-run` lists refs without
+deleting them. Run records are retained.
+
+#### `runs prune` Example
+
+```sh
+# Preview the default cleanup, then remove refs at least 60 days old.
+npx roast runs prune --dry-run
+npx roast runs prune --older-than 1440h
+```
+
+### `gate`
+
+Manage the Git pre-commit review gate. See [Pre-commit gate](#pre-commit-gate).
+
+#### `gate` Example
+
+```sh
+npx roast gate enable
+npx roast gate status
+npx roast gate disable
+```
+
+### `gate enable`
+
+Install the pre-commit gate with `npx roast gate enable`.
+
+#### `gate enable` Example
+
+```sh
+npx roast gate enable
+```
+
+### `gate status`
+
+Report the gate and recorded decision with `npx roast gate status`.
+
+#### `gate status` Example
+
+```sh
+npx roast gate status
+```
+
+### `gate disable`
+
+Disable the gate with `npx roast gate disable`.
+
+#### `gate disable` Example
+
+```sh
+npx roast gate disable
+```
+
+### `gate settings`
+
+Print the configured gate timeout and severity with
+`npx roast gate settings`. This internal command is used by the hook.
+
+#### `gate settings` Example
+
+```sh
+npx roast gate settings
+```
+
+### `skill`
+
+Manage the bundled agent skill. See
+[Install the agent skill](#install-the-agent-skill).
+
+#### `skill` Example
+
+```sh
+npx roast skill install
+npx roast skill status
+```
+
+### `skill install`
+
+Install the agent skill with `npx roast skill install`. Use `--global` for
+user-level directories, `--dir` for a specific parent skills directory, or
+`--force` to overwrite differing installed files.
+
+#### `skill install` Example
+
+```sh
+# Install for this project, for your user, or in a specific directory.
+npx roast skill install
+npx roast skill install --global
+npx roast skill install --dir .agents/skills --force
+```
+
+### `skill status`
+
+Inspect installed copies with `npx roast skill status`. Use `--global` or
+`--dir` to inspect a different location.
+
+#### `skill status` Example
+
+```sh
+# Check the project, user-level, or a specific skills directory.
+npx roast skill status
+npx roast skill status --global
+npx roast skill status --dir .agents/skills
+```
 
 ## Use
 
@@ -656,8 +937,10 @@ Snapshot capture can be disabled with `review.snapshot: false` or fail. When
 capture succeeds, snapshots are Git refs under `refs/roast/snapshots/`.
 `npx roast runs checkout <run-id> [dir]` requires a saved snapshot that is
 still available. It restores a detached linked worktree with the captured
-contents and index. `npx roast runs prune` removes snapshot refs older than
-30 days (`--dry-run` to preview) but never run directories.
+contents and index. It also copies the source checkout's current project
+credentials into a private `.env.roast` in the restored worktree and adds
+ignore rules there if needed. `npx roast runs prune` removes snapshot refs
+older than 30 days (`--dry-run` to preview) but never run directories.
 
 ## Pre-commit gate
 

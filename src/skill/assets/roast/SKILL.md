@@ -39,8 +39,9 @@ project config; custom endpoints can also be configured there.
 
 Set up credentials with `npx roast login`: with no argument it logs in to
 each built-in provider (`anthropic`, `openai`, `openrouter`) the config uses
-that has no key yet, and stores the key for the project inside `.git`
-(`--global` stores it for the user). Login needs the operator at an
+that has no key yet, and stores the key in the gitignored `.env.roast` at
+the repository root (`--global` stores it for the user).
+Login needs the operator at an
 interactive terminal to paste a key or approve in a browser, so ask them to
 run it rather than running it yourself. Environment variables
 (`ROAST_FINDER_API_KEY` or `ROAST_VERIFIER_API_KEY`, the profile's

@@ -12,6 +12,7 @@ import type { Env } from '../config/credential.js'
 import type { ProjectConfig } from '../config/load.js'
 import { resolveRole, type RoleName } from '../config/role.js'
 import {
+    prepareProjectCredentials,
     projectCredentialsPath,
     saveCredential,
     userCredentialsPath,
@@ -204,7 +205,11 @@ export async function loginProvider (
                 'rejected the key it minted; nothing stored')
         }
     }
-    await saveCredential(target.path, provider.name, key, new Date())
+    const opts = { env:ctx.env, signal:ctx.signal }
+    if (target.scope === 'project') {
+        await prepareProjectCredentials(target.path, opts)
+    }
+    await saveCredential(target.path, provider.name, key, new Date(), opts)
     ctx.stdout.write(`stored ${provider.name} credential ` +
         `(${target.scope} scope)\n`)
 }

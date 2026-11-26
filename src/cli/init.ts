@@ -11,6 +11,9 @@ import { roleKeyVar } from '../config/credential.js'
 import { endpointProblem, PROTOCOLS } from '../config/endpoint.js'
 import { SUGGESTED_MODELS } from '../config/defaults.js'
 import { PROJECT_CONFIG_NAME } from '../config/load.js'
+import {
+    addProjectIgnoreEntries, PROJECT_IGNORE_ENTRY,
+} from '../credentials/project-ignore.js'
 import { gitRoot } from '../git/git.js'
 import { goTrimSpace } from '../gocompat/strings.js'
 import type { CommandDef, RunContext } from './command.js'
@@ -30,6 +33,20 @@ import {
     interactiveTerminals, promptYesDefault, promptNoDefault,
     type LineReader,
 } from './terminal.js'
+
+async function ignoreProjectFiles (
+    repo:string, ctx:RunContext
+):Promise<void> {
+    const state = await ensureStateIgnored(repo)
+    if (state.added) {
+        ctx.stdout.write(`added ${STATE_IGNORE_ENTRY} to ${state.path}\n`)
+    }
+    const credentials = await addProjectIgnoreEntries(repo)
+    if (credentials.added) {
+        ctx.stdout.write(`added ${PROJECT_IGNORE_ENTRY} rules to ` +
+            `${credentials.path}\n`)
+    }
+}
 
 export async function offerLogin (
     file:string, ctx:RunContext
@@ -534,11 +551,7 @@ export const initCommand:CommandDef = {
                 ctx.cwd, finderChoice!, verifierChoice!
             )
             ctx.stdout.write(`wrote ${file}\n`)
-            const ignored = await ensureStateIgnored(repo)
-            if (ignored.added) {
-                ctx.stdout.write(`added ${STATE_IGNORE_ENTRY}` +
-                    ` to ${ignored.path}\n`)
-            }
+            await ignoreProjectFiles(repo, ctx)
             for (const [role, choice] of [
                 ['finder', finderChoice!],
                 ['verifier', verifierChoice!],
@@ -567,13 +580,7 @@ export const initCommand:CommandDef = {
                 throw err
             }
             ctx.stdout.write(`wrote ${file}\n`)
-            const ignored = await ensureStateIgnored(repo)
-            if (ignored.added) {
-                ctx.stdout.write(
-                    `added ${STATE_IGNORE_ENTRY}` +
-                    ` to ${ignored.path}\n`
-                )
-            }
+            await ignoreProjectFiles(repo, ctx)
             if (!args['no-login']) {
                 await offerLogin(file, ctx)
             }
