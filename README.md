@@ -40,7 +40,7 @@ via read-only file, grep, and listing tools.
   * [`doctor`](#doctor)
   * [`ignore`](#ignore)
   * [`runs`](#runs)
-  * [`runs show`](#runs-show)
+  * [`runs show `](#runs-show-)
   * [`runs checkout`](#runs-checkout)
   * [`runs prune`](#runs-prune)
   * [`gate`](#gate)
